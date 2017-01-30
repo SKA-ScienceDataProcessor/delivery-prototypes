@@ -25,8 +25,8 @@ Transfers must be submitting using this API call and the POST method.
 
 ####Parameters
 
-* `productID`
-* `destinationPath`
+* `product_id`
+* `destination_path`
 
 ####Returns
 
@@ -39,7 +39,9 @@ JSON with the following fields:
 If successful, the HTTP status code will be 202 (Accepted).  If unsuccessful, a status
 code of 400 or higher will be returned.
 
-###`/getStatus`
+###`/transferStatus`
+
+This function uses the GET method
 
 ####Parameters
 
@@ -54,7 +56,7 @@ JSON with all non-null database fields except for the stager callback code for t
 * 400: If missing required parameter
 * 403: If not authorized
 * 404: If not found
-* 500: If the job is in an error state
+* 500: If an error occurred processing the request
 
 ###`/doneStaging`
 
@@ -63,7 +65,7 @@ tasks.  It currently uses one-time passcodes but should eventually be updated to
 OAuth.
 
 ####Parameters
-* `product`: Product ID
+* `product_id`: Product ID
 * `jobid`: **Not yet implemented in test stager**
 * `authcode`: Authorization code generated when the job was sent to the stager
 * `path`: Path at which the staged product was placed
@@ -79,8 +81,8 @@ Note that for now using varchar(255) for the FTS job ID, although this might be 
 ```sql
 
 CREATE TABLE jobs (
-jobid VARCHAR(36),
-productid TEXT,
+job_id VARCHAR(36),
+product_id TEXT,
 status ENUM('SUBMITTED', 'STAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
 detailed_status TEXT,
 destination_path TEXT,
@@ -94,11 +96,14 @@ time_staging TIMESTAMP NULL,
 time_transferring TIMESTAMP NULL,
 time_error TIMESTAMP NULL,
 time_success TIMESTAMP NULL,
-PRIMARY KEY (jobid));
+PRIMARY KEY (job_id));
 
 ```
 
 ## Known issues
 
 * the application doesn't automatically reconnect to rabbit mq in the event that the
-  connection to the server is broken
+  connection to the server is broken.
+
+* X.509 client identification still isn't working
+

@@ -24,7 +24,7 @@ import ConfigParser
 #import os
 import pika
 import sys
-#import time
+import time
 
 from OpenSSL import SSL, crypto
 from os.path import realpath, dirname, join
@@ -32,6 +32,7 @@ from os.path import realpath, dirname, join
 from pika.adapters import twisted_connection
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
+from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 #from twisted.internet.task import LoopingCall
 from twisted.logger import globalLogPublisher, FileLogObserver, formatEvent, Logger
 #from twisted.python.modules import getModule
@@ -44,6 +45,27 @@ from transfersubmit import TransferSubmit
 from transferstatus import TransferStatus
 
 from ftsmanager import FTSUpdater
+
+class PIKAReconnectingClientFactory(ReconnectingClientFactory):
+
+  def startedConnecting(self, conn):
+    global log
+    log.info('About to connect to rabbitmq')
+  def buildProtocol(self, addr):
+    global log
+    log.info('Connected')
+    self.resetDelay()
+    p = pika.ConnectionParameters()
+    tc = twisted_connection.TwistedProtocolConnection(p)
+    return tc
+  def clientConnectionLost(self, conn, reason):
+    global log
+    log.info('Lost connection to rabbitmq: ' + str(reason))
+    ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
+  def clientConnectionFailed(self, conn, reason):
+    global log
+    log.info('Unable to connect to rabbitmq: ' + str(reason))
+    ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
 
 def main ():
   global dbpool
@@ -85,7 +107,7 @@ def main ():
   def setup_nodes(conn):
     t_submit = TransferSubmit(dbpool, staging_queue, conn)
     root.putChild('submitTransfer', t_submit)
-    root.putChild('getStatus', TransferStatus(dbpool))
+    root.putChild('transferStatus', TransferStatus(dbpool))
     root.putChild('doneStaging', StagingFinish(dbpool))
 
   parameters = pika.ConnectionParameters()
@@ -93,6 +115,9 @@ def main ():
                               twisted_connection.TwistedProtocolConnection,
                               parameters)
   d = cc.connectTCP(host, 5672)
+  #conn = reactor.connectTCP(host, 5672, PIKAReconnectingClientFactory())
+  #d = conn.ready
+  #setup_nodes(conn)
   d.addCallback(lambda protocol: protocol.ready)
   d.addCallback(setup_nodes)
 

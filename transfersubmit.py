@@ -61,7 +61,7 @@ class TransferSubmit (Resource):
 
   def render_POST(self, request):
   	# Check fields and return an error if any are missing
-    for formvar in ['productID', 'destinationPath']:
+    for formvar in ['product_id', 'destination_path']:
       if formvar not in request.args:
         request.setResponseCode(400)
         result = {
@@ -77,12 +77,11 @@ class TransferSubmit (Resource):
     # Create database record
     # (with status set to 'ERROR' until the job is added to rabbitmq)
     def add_initial(txn):
-      self.log.debug("Running add_initial")
       try:
-        txn.execute("INSERT INTO jobs (jobid, productid, status, destination_path, "
+        txn.execute("INSERT INTO jobs (job_id, product_id, status, destination_path, "
                     "stager_callback, time_submitted) VALUES (%s, %s, 'ERROR', %s, "
-                    "%s, now())", [job_uuid, request.args['productID'][0],
-                    request.args['destinationPath'][0], callback])
+                    "%s, now())", [job_uuid, request.args['product_id'][0],
+                    request.args['destination_path'][0], callback])
       except Exception, e:
         self.log.error(e)
         request.setResponseCode(500)
@@ -92,7 +91,6 @@ class TransferSubmit (Resource):
     # Add to rabbitmq
     @inlineCallbacks
     def add_to_rabbitmq(_):
-      self.log.debug("Running add_to_rabbitmq")
       channel = yield self.pika_conn.channel()
       yield channel.queue_declare(queue=self.staging_queue,
                                   exclusive=False, durable=False)
@@ -100,12 +98,11 @@ class TransferSubmit (Resource):
                                   self.pika_send_properties)
 
     def update_job_status_submitted(txn):
-      self.log.debug("Running update_job_status_submitted")
       pass
 
-      # Update database record state to STAGING
+      # Update database record state to SUBMITTED
       try:
-        txn.execute("UPDATE jobs SET status = 'STAGING' WHERE jobid = %s", [job_uuid])
+        txn.execute("UPDATE jobs SET status = 'SUBMITTED' WHERE job_id = %s", [job_uuid])
       except Exception, e:
         self.log.error(e)
         request.setResponseCode(500)
@@ -119,15 +116,15 @@ class TransferSubmit (Resource):
 
     # Report results
     def report_job_creation(_):
-      self.log.debug("Running report_job_creation")
       result = {
-        'msg': 'Job submission processed succesfully',
+        'msg': 'Job submission processed successfully',
         'error': False,
         'job_id': job_uuid
       }
       request.setResponseCode(202)
       request.write(json.dumps(result) + "\n")
       request.finish()
+      self.log.info("Job submission of {0} processed successfully".format(job_uuid))
 
     def handleCreationError(e):
       request.setResponseCode(500)
