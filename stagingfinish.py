@@ -21,6 +21,7 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 #import fts3.rest.client.easy as fts3
 
+from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.logger import Logger
 from twisted.web.resource import Resource
 
@@ -33,4 +34,3 @@ class StagingFinish (Resource):
     self.dbpool = dbpool
   def render_GET(self, request):
     return "Staging is done\n"
-

@@ -39,8 +39,9 @@ from twisted.logger import globalLogPublisher, FileLogObserver, formatEvent, Log
 from twisted.web.resource import Resource
 from twisted.web.server import Site #, NOT_DONE_YET
 
+# The web pages
 from rootpage import RootPage
-from staging import StagingFinish
+from stagingfinish import StagingFinish
 from transfersubmit import TransferSubmit
 from transferstatus import TransferStatus
 

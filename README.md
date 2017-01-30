@@ -10,13 +10,6 @@ This repo contains code for a transfer prototype for a MeerKAT transfer service.
 * `throwaway/fail`: Code from abandoned approaches
 * `throwaway/working`: Small scale test programs to verify how to implement a particular bit of code in an approved fashion
 
-##Security
-
-Note that the intention is that the service will take client certificates for
-authentication but, in the meantime, as this is a secondary issue at the prototyping
-stage, for the moment the service is only available via the loopback interface due to
-issues with client certificate acceptance.
-
 ##REST API description
 
 ###`/submitTransfer`
@@ -105,5 +98,12 @@ PRIMARY KEY (job_id));
 * the application doesn't automatically reconnect to rabbit mq in the event that the
   connection to the server is broken.
 
-* X.509 client identification still isn't working
+* X.509 client identification still isn't working so for now submitter information is
+  not collected nor are authentication / authorization checks being done.  Currently
+  security is managed by only binding to the loopback interface.
 
+## Example commands
+
+* Submit a job: curl http://localhost:8080/submitTransfer -d product_id=5 -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu
+
+* Get transfer status: curl http://localhost:8080/transferStatus?job_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2
