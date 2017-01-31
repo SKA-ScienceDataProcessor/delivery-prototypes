@@ -32,6 +32,7 @@ from os.path import realpath, dirname, join
 from pika.adapters import twisted_connection
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
+from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
 #from twisted.internet.task import LoopingCall
 from twisted.logger import globalLogPublisher, FileLogObserver, formatEvent, Logger
@@ -45,7 +46,9 @@ from stagingfinish import StagingFinish
 from transfersubmit import TransferSubmit
 from transferstatus import TransferStatus
 
-from ftsmanager import FTSUpdater
+# From 
+from staging import init_staging
+from ftsmanager import init_fts_manager
 
 class PIKAReconnectingClientFactory(ReconnectingClientFactory):
 
@@ -104,20 +107,35 @@ def main ():
   staging_queue = configData.get('ampq', 'staging_queue')
   transfer_queue = configData.get('ampq', 'transfer_queue')
 
-  # Setup connection
+  # Setup connection and initialize web interface and fts + staging managers
   def setup_nodes(conn):
+    # Setup web interface portions
     t_submit = TransferSubmit(dbpool, staging_queue, conn)
     root.putChild('submitTransfer', t_submit)
     root.putChild('transferStatus', TransferStatus(dbpool))
     root.putChild('doneStaging', StagingFinish(dbpool))
+    
+    staging_concurrent_max = configData.get('staging', 'concurrent_max')
+#     x = DeferredSemaphore(1)
+#     d = x.acquire()
+#     d.addCallback(lambda x: x.release)
+#     d.addCallback(lambda _: log.info('Acquired semaphore'))
+#     d.addErrback(lambda _: log.error('Semaphore error'))
+    init_staging(conn, dbpool, staging_queue, staging_concurrent_max)
+    fts_server = configData.get('fts', 'server')
+    fts_proxy = configData.get('fts', 'proxy')
+    fts_concurrent_max = configData.get('fts', 'concurrent_max')
+    #init_fts_manager(conn, dbpool, fts_server, fts_proxy,
+    #                 transfer_queue, fts_concurrent_max)
 
   parameters = pika.ConnectionParameters()
   cc = protocol.ClientCreator(reactor,
                               twisted_connection.TwistedProtocolConnection,
                               parameters)
   d = cc.connectTCP(host, 5672)
-  #conn = reactor.connectTCP(host, 5672, PIKAReconnectingClientFactory())
-  #d = conn.ready
+  #prcf = PIKAReconnectingClientFactory()
+  #conn = reactor.connectTCP(host, 5672, prcf)
+  #d = prcf.protocol.ready
   #setup_nodes(conn)
   d.addCallback(lambda protocol: protocol.ready)
   d.addCallback(setup_nodes)

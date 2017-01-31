@@ -19,8 +19,9 @@ from __future__ import print_function # for python 2
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
-#import fts3.rest.client.easy as fts3
+import fts3.rest.client.easy as fts3
 
+from twisted.internet.task import LoopingCall
 from twisted.logger import Logger
 
 # FTS Updater
@@ -36,3 +37,6 @@ def FTSUpdater():
 
 
   # Compare and update
+
+def init_fts_manager(conn, dbpool, fts_server, fts_proxy, transfer_queue, fts_concurrent_max):
+  pass

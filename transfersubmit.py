@@ -29,7 +29,6 @@ from pika import exceptions
 from pika.adapters import twisted_connection
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.logger import Logger
-from twisted.python.failure import Failure
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 

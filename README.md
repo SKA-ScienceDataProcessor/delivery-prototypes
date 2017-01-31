@@ -4,6 +4,27 @@ This repo contains code for a transfer prototype for a MeerKAT transfer service.
 * [DELIV prototype dev notes](https://docs.google.com/document/d/1Hj6m_Ya_mqGoXOwtQfCGe6KFXjEPXRDKqTrDOS0so7I/edit)
 * [FTS setup](https://docs.google.com/document/d/1u6VLhZ6PYIK6yVwheAJqo5kDhm1d3Xz1d7pn1PGUnEk/edit)
 
+##Installation
+
+The installation was developed on Ubuntu 14 LTS, and installation can be done
+by following the instructions below:
+
+````
+sudo apt-get install python-dev python-virtualenv libssl-dev libffi-dev \
+  libmariadbclient-dev mariadb-server mariadb-client libcurl4-gnutls-dev \
+  python-m2crypto authbind
+virtualenv --system-site-packages venv
+. venv/bin/activate
+# note that if you don’t use the version of M2Crypto available through apt,
+# due to how OpenSSL headers are defined in Ubuntu, you’ll get an SSL error
+# when trying to use it if installed by pip
+pip install pika twisted ConfigParser service_identity treq urllib3[secure] \
+  pyOpenSSL cryptography idna certifi mysql-python git+https://gitlab.cern.ch/fts/fts-rest
+sudo touch /etc/authbind/byport/{80,443}
+sudo chmod 500 /etc/authbind/byport/{80,443}
+sudo chown `whoami` /etc/authbind/byport/{80,443}
+```
+
 ##Dirs
 * `legacy`: Contains code from an earlier incarnation that didn't use a DB backend
 * `throwaway`: Contains code not meant to be part of the final product
@@ -93,10 +114,25 @@ PRIMARY KEY (job_id));
 
 ```
 
+##TODO
+
+* Implement interaction with stager.  (This requires a small rewrite of the stager)
+
+* Implement interaction with FTS.
+
+* Document configuration file settings. Support configuration files stored
+  outside the source code.
+
+* Rewrite start to launch using twistd rather than the current config script.
+
+* Support timeouts in case of stager failure
+
 ## Known issues
 
 * the application doesn't automatically reconnect to rabbit mq in the event that the
-  connection to the server is broken.
+  connection to the server is broken.  
+
+* the system doesn't validate destination paths to ensure that they appear valid
 
 * X.509 client identification still isn't working so for now submitter information is
   not collected nor are authentication / authorization checks being done.  Currently
