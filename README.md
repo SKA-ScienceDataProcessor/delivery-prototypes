@@ -36,6 +36,7 @@ Dirs
 
 REST API description
 ===
+
 `/submitTransfer`
 ---
 Transfers must be submitted using this API call and the POST method.
@@ -70,6 +71,7 @@ This function uses the GET method
 JSON with all non-null database fields except for the stager callback code for the job.
 
 **HTTP status code**
+
 * 200: If all is normal
 * 400: If missing required parameter
 * 403: If not authorized
@@ -84,6 +86,7 @@ tasks.  It currently uses one-time passcodes but should eventually be updated to
 OAuth.
 
 **Parameters**
+
 * `job_id`: Job ID
 * `product_id`: Product ID
 * `authcode`: Authorization code generated when the task was sent to the stager
@@ -93,6 +96,7 @@ OAuth.
 * `msg`: A text message from the stager indicating the results of the request
 
 **HTTP status code**
+
 * 200: If all is normal
 * 400: If parameters were invalid
 * 403: If the request was unauthorized
@@ -100,6 +104,7 @@ OAuth.
 
 Database description
 ===
+
 Note that for now using varchar(255) for the FTS job ID, although this might be a proper UUID
 (which the corresponding mysql function stores as a VARCHAR(36)).
 
@@ -127,6 +132,7 @@ PRIMARY KEY (job_id));
 
 TODO
 ===
+
 * Implement interaction with stager.  (This requires a small rewrite of the stager)
 
 * Implement interaction with FTS.
@@ -150,6 +156,7 @@ TODO
 
 Known issues
 ===
+
 * the application doesn't automatically reconnect to rabbit mq in the event that the
   connection to the server is broken.  
 
@@ -166,6 +173,7 @@ Known issues
 
 Notes
 ===
+
 If you get an Unhandled Error in Deferred where there's no errback for the Deferred,
 then you can add the following code to the file involved to ensure that the Exception
 will be reported:
@@ -179,6 +187,7 @@ log.startLogging(sys.stdout)
 
 Example commands
 ===
+
 * Submit a job: `curl http://localhost:8080/submitTransfer -d product_id=005 -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu`
 
 * Get transfer status: `curl http://localhost:8080/transferStatus?job_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2`
