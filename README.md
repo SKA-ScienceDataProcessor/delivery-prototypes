@@ -113,7 +113,7 @@ Note that for now using varchar(255) for the FTS job ID, although this might be 
 CREATE TABLE jobs (
 job_id VARCHAR(36),
 product_id TEXT,
-status ENUM('SUBMITTED', 'STAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
+status ENUM('SUBMITTED', 'STAGING', 'DONESTAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
 detailed_status TEXT,
 destination_path TEXT,
 submitter TEXT,
@@ -135,8 +135,6 @@ PRIMARY KEY (job_id));
 TODO
 ===
 
-* Implement interaction with stager.  (This requires a small rewrite of the stager)
-
 * Implement interaction with FTS.
 
 * Document configuration file settings. Support configuration files stored
@@ -150,14 +148,18 @@ TODO
   the callback chain from continuing if there's an error in one of the earlier
   callbacks.
 
+* Verify that whenever an error is reported that the database is updated to report this
+  as well.
+
 * Make sure that the error timestamp is being set when the job status is being changed
   to ERROR.  May want to do this at the DB level (for the other timestamps as well)
-
-* Add additional statuses for when a job is queued
 
 * Create docstrings for functions
 
 * Update variable and function names in files to reflect their level of privateness
+
+* Maybe update the name of the detailed_status field to extra_status given that it's not
+  really used frequently.
 
 Known issues
 ===
@@ -175,6 +177,10 @@ Known issues
   see e.g., http://nithril.github.io/amqp/2015/07/05/fair-consuming-with-rabbitmq/ - but
   if this were implemented in this prototype then more information than just the job_id
   would likely need to be added to the queues.
+
+* Currently using non-persistant rabbitmq queues for simplicity of clearing invalid
+  entries.  This obviously should not be the case in a production environment.
+
 
 Notes
 ===

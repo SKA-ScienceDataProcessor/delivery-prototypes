@@ -55,6 +55,7 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path
   # Update database information
   try:
     r = yield dbpool.runQuery("UPDATE jobs SET "
+                              "status = 'DONESTAGING', "
                               "time_staging_finished = now(), "
                               "stager_path = %s, "
                               "stager_hostname = %s, "
