@@ -47,15 +47,15 @@ class TransferStatus (Resource):
       job_id = request.args['job_id'][0]
       txn.execute("SELECT job_id, product_id, status, detailed_status, "
                   "destination_path, submitter, fts_jobid, fts_details, "
-                  "stager_path, time_submitted, time_staging, "
-                  "time_transferring, time_error, time_success FROM jobs "
-                  "WHERE job_id = %s", [job_id])
+                  "stager_path, stager_hostname, stager_status, time_submitted, "
+                  "time_staging, time_transferring, time_error, time_success FROM "
+                  "jobs WHERE job_id = %s", [job_id])
       result = txn.fetchone()
       if result:
         fields = ['job_id', 'product_id', 'status', 'detailed_status',
                   'destination_path', 'submitter', 'fts_jobid', 'fts_details',
-                  'stager_path', 'time_submitted', 'time_staging',
-                  'time_transferring', 'time_error', 'time_success']
+                  'stager_path', 'stager_hostname', 'stager_status', 'time_submitted',
+                  'time_staging', 'time_transferring', 'time_error', 'time_success']
         results = dict(zip(fields, result))
         def serialize_with_datetime (obj):
           if isinstance(obj,datetime):

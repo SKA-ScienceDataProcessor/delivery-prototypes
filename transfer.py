@@ -55,13 +55,15 @@ class PIKAReconnectingClientFactory(ReconnectingClientFactory):
   def startedConnecting(self, conn):
     global log
     log.info('About to connect to rabbitmq')
+  @inlineCallbacks
   def buildProtocol(self, addr):
     global log
     log.info('Connected')
     self.resetDelay()
     p = pika.ConnectionParameters()
     tc = twisted_connection.TwistedProtocolConnection(p)
-    return tc
+    yield tc.ready
+    returnValue(tc)
   def clientConnectionLost(self, conn, reason):
     global log
     log.info('Lost connection to rabbitmq: ' + str(reason))
@@ -116,12 +118,11 @@ def main ():
     root.putChild('doneStaging', StagingFinish(dbpool))
     
     staging_concurrent_max = configData.get('staging', 'concurrent_max')
-#     x = DeferredSemaphore(1)
-#     d = x.acquire()
-#     d.addCallback(lambda x: x.release)
-#     d.addCallback(lambda _: log.info('Acquired semaphore'))
-#     d.addErrback(lambda _: log.error('Semaphore error'))
-    init_staging(conn, dbpool, staging_queue, staging_concurrent_max)
+    staging_url = configData.get('staging', 'server')
+    staging_callback = configData.get('staging', 'callback')
+
+    init_staging(conn, dbpool, staging_queue, staging_concurrent_max,
+                 staging_url, staging_callback, transfer_queue)
     fts_server = configData.get('fts', 'server')
     fts_proxy = configData.get('fts', 'proxy')
     fts_concurrent_max = configData.get('fts', 'concurrent_max')
@@ -133,15 +134,14 @@ def main ():
                               twisted_connection.TwistedProtocolConnection,
                               parameters)
   d = cc.connectTCP(host, 5672)
-  #prcf = PIKAReconnectingClientFactory()
-  #conn = reactor.connectTCP(host, 5672, prcf)
-  #d = prcf.protocol.ready
-  #setup_nodes(conn)
   d.addCallback(lambda protocol: protocol.ready)
   d.addCallback(setup_nodes)
+  #prcf = PIKAReconnectingClientFactory()
+  #conn = reactor.connectTCP(host, 5672, prcf)
+  #setup_nodes(conn)
 
   # Setup HTTP
-  factory = Site(root)  
+  factory = Site(root)
   endpoint = endpoints.TCP4ServerEndpoint(reactor, 8080, interface='127.0.0.1')
   endpoint.listen(factory)
 

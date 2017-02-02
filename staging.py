@@ -19,33 +19,106 @@ from __future__ import print_function # for python 2
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
-import treq
 import json
+import random
+import string
+import sys
 import treq
+import twisted
 
 from twisted.internet import defer, reactor
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.logger import Logger
 
-# Init global vars
-log = None
-conn = None
-dbpool = None
-sem_staging = None
-staging_queue = None
+@inlineCallbacks
+def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path, msg):
+  global transfer_queue
+  global conn
+  global sem_staging
 
-# This file will contain code to listen to the staging queue and then
-# interact with the staging software
+  # Report stager failure is something other than success was reported
+  if not stager_success:
+    log.error('The stager reported failure')
+    #
 
-def send_to_staging(sem, job_id):
+  # Verify authcode against value returned from DB
+  try:
+    r = yield dbpool.runQuery("SELECT stager_callback FROM jobs WHERE "
+                              "job_id = %s", [job_id])
+    if r[0][0] != authcode:
+      raise Exception('Invalid authcode %s for job %s' % authcode, job_id)
+  except Exception, e:
+    yield log.error(e)
+    yield sem_staging.release()
+    returnValue(False)
+
+  # Update database information
+  # UPDATE jobs SET detailed_status = 'Finished staging', stager_hostname, WHERE job_id = %s
+
+  # Add to transfer queue
+
+  #yield sem_staging.release()
+  yield log.info("Completed staging of %s" % job_id)
+  returnValue(True)
+
+@inlineCallbacks
+def send_to_staging(job_id, token_len=32):
   global log
   global dbpool
   global sem_staging
+  global stager_url
+  global stager_callback
 
-  log.info("Processing request to stage job {0}".format(job_id))
+  # Get job details from DB and create authcode for callback
+  try:
+    r = yield dbpool.runQuery("SELECT product_id FROM jobs WHERE job_id = %s",
+                              [job_id])
+    product_id = r[0][0]
+  except Exception, e:
+    yield log.error('Error retrieving product ID for job ID %s' % job_id)
+    yield log.error(e)
+    try:
+      dbpool.runQuery("UPDATE jobs SET status = 'ERROR', detailed_status = 'Error "
+                      "retrieving product ID when preparing to stage job' WHERE "
+                      "job_id = %s", [job_id])
+    except Exception:
+      # Just log this one as it might have been a broken DB that triggered
+      # the original error.
+      log.error('Error updating DB with staging error for job %s' % job_id)
+    # Abort the staging request as staging is impossible without a product ID
+    yield sem_staging.release()
+    returnValue(None)
+  authcode = ''.join(random.choice(string.lowercase) for i in range(token_len))
+  
+  # Update job status to staging and add callback code
+  try:
+    yield dbpool.runQuery("UPDATE jobs SET status = 'STAGING', time_staging = now(), "
+                          "stager_callback = %s WHERE job_id = %s", (authcode, job_id))
+  except Exception:
+    yield log.error('Error updating job status / recording stager callback code '
+                    'for job %s' % job_id)
+    yield sem_staging.release()
+    returnValue(None)
+  
+  # Contact the stager to initiate the transfer process
+  params = {
+    'job_id': job_id,
+    'product_id': product_id,
+    'authcode': authcode,
+    'callback': stager_callback,
+  }
+  try:
+    r = yield treq.get(stager_url, params=params)
+    if int(r.code) >= 400:
+      raise Exception('The stager reported an error - status was %s' % r.code)
+  except Exception, e:
+    log.error('Error contacting stager at %s to submit request to stage product ID %s'
+              ' for job ID %s' % (stager_callback, product_id, job_id))
+    log.error(e)
+    yield dbpool.runQuery("UPDATE jobs SET status = 'ERROR', detailed_status = "
+                          "'Error contacting stager' WHERE job_id = %s", [job_id])
 
-  log.debug("about to release semaphore")
-  sem_staging.release()
+  yield log.info('Finished submitting job %s to stager' % job_id)
 
 @inlineCallbacks
 def staging_queue_listener():
@@ -54,7 +127,7 @@ def staging_queue_listener():
   global staging_queue
   global sem_staging
 
-  yield log.info("About to bind to staging queue")
+  #yield log.info("About to bind to staging queue")
 
   channel = yield conn.channel()
   queue = yield channel.queue_declare(queue=staging_queue,
@@ -66,38 +139,37 @@ def staging_queue_listener():
   queue_object, consumer_tag = yield channel.basic_consume(queue=staging_queue,
                                                            no_ack=False)
   while True:
-    log.debug("about to acquire semaphore")
-#    yield sem_staging.acquire()
-#    ch,method,properties,body = yield queue_object.get()
-#    if body:
-#      send_to_staging(body)
-#    yield ch.basic_ack(delivery_tag=method.delivery_tag)
+    #yield log.debug("about to acquire semaphore")
+    yield sem_staging.acquire()
+    #yield log.debug("semaphore acquired")
+    ch,method,properties,body = yield queue_object.get()
+    if body:
+      reactor.callInThread(send_to_staging, [body])
+      yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
-#@inlineCallbacks
-def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent):
+@inlineCallbacks
+def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
+                 s_callback, l_transfer_queue):
   global log
   global conn
   global dbpool
   global sem_staging
   global staging_queue
+  global stager_url
+  global stager_callback
+  global transfer_queue
   
   log = Logger()
+  twisted.python.log.startLogging(sys.stderr)
 
-  log.info("Initializing staging - ({0} job concurrency limit)".format(max_concurrent))
+  yield log.info("Initializing staging - ({0} job concurrency limit)".format(max_concurrent))
 
   conn = l_conn
   dbpool = l_dbpool
   sem_staging = DeferredSemaphore(int(max_concurrent))
   staging_queue = l_staging_queue
+  stager_url = s_url
+  stager_callback = s_callback
+  transfer_queue = l_transfer_queue
 
-  log.info("Tokens:\t{0}".format(sem_staging.tokens))
-
-  d = sem_staging.acquire()
-  d.addCallback(lambda x: x.release())
-  d.addCallback(lambda _: log.info("Acquired semaphore"))
-  d.addErrback(lambda _: log.error("Received error"))
-  #d = sem_staging.run(lambda _: log.info("run method"))
-
-  #return d
-  #log.info("Tokens:\t{0}".format(sem_staging.tokens))
-  #reactor.callInThread(staging_queue_listener)
+  reactor.callInThread(staging_queue_listener)

@@ -31,15 +31,15 @@ from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.logger import Logger
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
+from urlparse import urlparse
 
 class SubmitException (Exception):
-  def __init__(self, msg, job_id=None):
+  def __init__(self, msg=None, job_id=None):
     self.msg = msg
     self.job_id = job_id
   def toJSON (self):
     result = { 'error': True, 'job_id': self.job_id, 'msg': self.msg }
     return json.dumps(result) + "\n"
-    
 
 # API function fall: submitTransfer
 # (submit a transfer)
@@ -70,33 +70,51 @@ class TransferSubmit (Resource):
         }
         return json.dumps(result) + "\n"
 
+    # Validate URL
+    try:
+      up = urlparse(request.args['destination_path'][0])
+      if up.scheme != 'gsiftp' or up.netloc == '':
+        raise SubmitException()
+      destination_path = up.geturl()
+    except Exception, e:
+      if not isinstance(e, SubmitException):
+        self.log.error(e)
+      request.setResponseCode(400)
+      result = {
+        'msg': 'destination_path must be a URL specifying a gsiftp server',
+        'job_id': None,
+        'error': True,
+      }
+      return json.dumps(result) + "\n"
+
+    # Doesn't validate this yet but probably should eventually
+    product_id = request.args['product_id'][0]
+
     job_uuid = str(uuid.uuid1())
     callback = ''.join(random.choice(string.lowercase) for i in range(32))
 
     # Create database record
     # (with status set to 'ERROR' until the job is added to rabbitmq)
-    def add_initial(txn):
+    def _add_initial(txn):
       try:
         txn.execute("INSERT INTO jobs (job_id, product_id, status, destination_path, "
                     "stager_callback, time_submitted) VALUES (%s, %s, 'ERROR', %s, "
-                    "%s, now())", [job_uuid, request.args['product_id'][0],
-                    request.args['destination_path'][0], callback])
+                    "%s, now())", [job_uuid, product_id, destination_path, callback])
       except Exception, e:
         self.log.error(e)
         request.setResponseCode(500)
         raise SubmitException('Error creating database record', job_uuid)
-      self.log.debug("Done running add_initial {0}".format(job_uuid))
 
     # Add to rabbitmq
     @inlineCallbacks
-    def add_to_rabbitmq(_):
+    def _add_to_rabbitmq(_):
       channel = yield self.pika_conn.channel()
       yield channel.queue_declare(queue=self.staging_queue,
                                   exclusive=False, durable=False)
       yield channel.basic_publish('', self.staging_queue, job_uuid,
                                   self.pika_send_properties)
 
-    def update_job_status_submitted(txn):
+    def _update_job_status_submitted(txn):
       pass
 
       # Update database record state to SUBMITTED
@@ -114,7 +132,7 @@ class TransferSubmit (Resource):
         return json.dumps(result) + "\n"
 
     # Report results
-    def report_job_creation(_):
+    def _report_job_creation(_):
       result = {
         'msg': 'Job submission processed successfully',
         'error': False,
@@ -125,7 +143,7 @@ class TransferSubmit (Resource):
       request.finish()
       self.log.info("Job submission of {0} processed successfully".format(job_uuid))
 
-    def handleCreationError(e):
+    def _handleCreationError(e):
       request.setResponseCode(500)
       if isinstance(SubmitException, e.value):
         request.write(e.toJSON())
@@ -140,10 +158,10 @@ class TransferSubmit (Resource):
       request.finish()
       #return(e)
         
-    d = self.dbpool.runInteraction(add_initial)
-    d.addCallback(add_to_rabbitmq)
-    d.addCallback(lambda _: self.dbpool.runInteraction(update_job_status_submitted))
-    d.addCallback(report_job_creation)
-    d.addErrback(handleCreationError)
+    d = self.dbpool.runInteraction(_add_initial)
+    d.addCallback(_add_to_rabbitmq)
+    d.addCallback(lambda _: self.dbpool.runInteraction(_update_job_status_submitted))
+    d.addCallback(_report_job_creation)
+    d.addErrback(_handleCreationError)
 
     return NOT_DONE_YET
