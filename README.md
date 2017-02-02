@@ -37,8 +37,9 @@ Dirs
 REST API description
 ===
 
-`/submitTransfer`
+/submitTransfer
 ---
+
 Transfers must be submitted using this API call and the POST method.
 
 **Parameters**
@@ -58,8 +59,9 @@ If successful, the HTTP status code will be 202 (Accepted).  If unsuccessful, a 
 code of 400 or higher will be returned.  Note that the application ensures that the URL
 is well formed and specifies a GridFTP server.
 
-`/transferStatus`
+/transferStatus
 ---
+
 This function uses the GET method
 
 **Parameters**
@@ -78,7 +80,7 @@ JSON with all non-null database fields except for the stager callback code for t
 * 404: If not found
 * 500: If an error occurred processing the request
 
-`/doneStaging`
+/doneStaging
 ---
 
 This is an internal call used to enable the stager to report the completion of staging
