@@ -84,8 +84,7 @@ JSON with all non-null database fields except for the stager callback code for t
 ---
 
 This is an internal call used to enable the stager to report the completion of staging
-tasks.  It currently uses one-time passcodes but should eventually be updated to use
-OAuth.
+tasks. It allows requests to use either GET or POST methods.
 
 **Parameters**
 
@@ -126,6 +125,7 @@ stager_hostname TEXT,
 stager_status TEXT,
 time_submitted TIMESTAMP NULL,
 time_staging TIMESTAMP NULL,
+time_staging_finished TIMESTAMP NULL,
 time_transferring TIMESTAMP NULL,
 time_error TIMESTAMP NULL,
 time_success TIMESTAMP NULL,
@@ -153,8 +153,11 @@ TODO
 * Make sure that the error timestamp is being set when the job status is being changed
   to ERROR.  May want to do this at the DB level (for the other timestamps as well)
 
-* Update timestamps collected to ensured that separate timestamps are reported for
-  staging start and staging completion
+* Add additional statuses for when a job is queued
+
+* Create docstrings for functions
+
+* Update variable and function names in files to reflect their level of privateness
 
 Known issues
 ===

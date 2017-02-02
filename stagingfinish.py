@@ -22,6 +22,7 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.logger import Logger
 from twisted.web.resource import Resource
+from twisted.web.server import NOT_DONE_YET
 
 from staging import finish_staging
 
@@ -33,9 +34,7 @@ class StagingFinish (Resource):
     Resource.__init__(self)
     self.dbpool = dbpool
     self.log = Logger()
-  @inlineCallbacks
   def render_GET(self, request):
-    
     try:
       params = {
         'job_id': request.args['job_id'][0],
@@ -49,14 +48,26 @@ class StagingFinish (Resource):
     except Exception:
       self.log.error('Invalid arguments calling doneStaging')
       request.setResponseCode(400)
-      returnValue("Error processing stager response")
+      return('Invalid arguments\n')
 
-    success = yield finish_staging(**params)
-    
-    if not success:
-      self.log.error('finish_staging reported an error')
+    def _handle_finish_staging_result(success):
+      if success:
+        request.setResponseCode(200)
+      else:
+        self.log.error('finish_staging reported an error\n')
+        request.setResponseCode(500)
+      request.write('Finished processing staging callback\n')
+      request.finish()
+    def _handle_finish_staging_error(failure):
+      self.log.error(failure)
       request.setResponseCode(500)
-    else:
-      request.setResponseCode(200)
+      request.write('Exception thrown running finish_staging\n')
+      request.finish()
+
+    d = finish_staging(**params)
+    d.addCallback(_handle_finish_staging_result)
+    d.addErrback(_handle_finish_staging_error)
     
-    returnValue('Finished processing staging callback')
+    return NOT_DONE_YET
+  def render_POST(self, request):
+    return self.render_GET(request)

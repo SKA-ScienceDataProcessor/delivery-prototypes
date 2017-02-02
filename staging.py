@@ -20,6 +20,7 @@ from __future__ import print_function # for python 2
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 import json
+import pika
 import random
 import string
 import sys
@@ -39,7 +40,6 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path
   # Report stager failure is something other than success was reported
   if not stager_success:
     log.error('The stager reported failure')
-    #
 
   # Verify authcode against value returned from DB
   try:
@@ -48,16 +48,40 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path
     if r[0][0] != authcode:
       raise Exception('Invalid authcode %s for job %s' % authcode, job_id)
   except Exception, e:
-    yield log.error(e)
+    yield log.error(str(e))
     yield sem_staging.release()
     returnValue(False)
 
   # Update database information
-  # UPDATE jobs SET detailed_status = 'Finished staging', stager_hostname, WHERE job_id = %s
+  try:
+    r = yield dbpool.runQuery("UPDATE jobs SET "
+                              "time_staging_finished = now(), "
+                              "stager_path = %s, "
+                              "stager_hostname = %s, "
+                              "stager_status = %s "
+                              "WHERE job_id = %s",
+                              [path, staged_to, msg, job_id])
+  except Exception, e:
+    yield log.error('Error updating DB to report staging finished for job %s' % job_id)
+    yield log.error(str(e))
+    yield sem_staging.release()
+    returnValue(False)
 
   # Add to transfer queue
+  try:
+    pika_send_properties = pika.BasicProperties(content_type='text/plain',
+                                                delivery_mode=1)
+    channel = yield conn.channel()
+    yield channel.queue_declare(queue=transfer_queue, exclusive=False, durable=False)
+    yield channel.basic_publish('', transfer_queue, job_id, pika_send_properties)
+  except Exception, e:
+    yield log.error('Error add job %s to rabbitmq transfer queue' % job_id)
+    yield log.error(str(e))
+    yield sem_staging.release()
+    returnValue(False)
 
-  #yield sem_staging.release()
+  # Allow next job into staging and report results
+  yield sem_staging.release()
   yield log.info("Completed staging of %s" % job_id)
   returnValue(True)
 
