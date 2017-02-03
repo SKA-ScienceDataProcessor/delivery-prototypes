@@ -82,7 +82,6 @@ def main ():
   log.info("About to initialize logging")
   observer=FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
   globalLogPublisher.addObserver(observer)
-  #log = Logger(observer=FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n"))
   log.info("Initialized logging")
 
   # Load settings
@@ -100,7 +99,6 @@ def main ():
   log.info("DB Connection Established")
 
   # Launch server
-  #root = RootPage(log)
   root = RootPage()
   root.putChild('', root)
   
@@ -124,10 +122,10 @@ def main ():
     init_staging(conn, dbpool, staging_queue, staging_concurrent_max,
                  staging_url, staging_callback, transfer_queue)
     fts_server = configData.get('fts', 'server')
-    fts_proxy = configData.get('fts', 'proxy')
     fts_concurrent_max = configData.get('fts', 'concurrent_max')
-    #init_fts_manager(conn, dbpool, fts_server, fts_proxy,
-    #                 transfer_queue, fts_concurrent_max)
+    fts_interval = configData.get('fts', 'polling_interval')
+    init_fts_manager(conn, dbpool, fts_server, transfer_queue,
+                     fts_concurrent_max, fts_interval)
 
   parameters = pika.ConnectionParameters()
   cc = protocol.ClientCreator(reactor,

@@ -23,10 +23,10 @@ import json
 import pika
 import random
 import string
-import sys
 import treq
 import twisted
 
+from sys import stderr
 from twisted.internet import defer, reactor
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.logger import Logger
@@ -185,7 +185,7 @@ def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
   global transfer_queue
   
   log = Logger()
-  twisted.python.log.startLogging(sys.stderr)
+  twisted.python.log.startLogging(stderr)
 
   yield log.info("Initializing staging - ({0} job concurrency limit)".format(max_concurrent))
 
