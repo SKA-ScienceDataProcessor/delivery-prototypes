@@ -17,8 +17,6 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 import ConfigParser
 import json
 import os
@@ -32,8 +30,10 @@ from socket import gethostname as hostname
 from twisted.internet import defer, reactor
 from twisted.logger import Logger
 
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
+
 @defer.inlineCallbacks
-def process_staging_request (job_id, product_id, callback, authcode):
+def process_staging_request(job_id, product_id, callback, authcode):
 
   log.info("process_staging_request (%s, %s, %s)" % (product_id, callback, authcode))
 
@@ -45,7 +45,6 @@ def process_staging_request (job_id, product_id, callback, authcode):
   stagingError = None
   log.info("About to link %s to %s" % (src_path, dst_path))
   try:
-    #yield shutil.copy2(src_path, dst_path)
     yield os.link(src_path, dst_path)
   except Exception, e:
     stagingError = e
@@ -55,7 +54,7 @@ def process_staging_request (job_id, product_id, callback, authcode):
     failure.trap(Exception)
     log.error("Error reporting staging results for product %s to %s" % (product_id, callback))
     log.error(str(failure))
-    
+
   if stagingError is not None:
     # Report error
     msg = ('Error copying product ID %s from %s to %s' %
@@ -65,25 +64,25 @@ def process_staging_request (job_id, product_id, callback, authcode):
     success = False
   else:
     msg = 'Product %s staged successfully to %s' % (product_id, dst_path)
-    success = True    
-  treq_result = treq.get(callback, params={ 'job_id': job_id,
-                                            'product_id': product_id,
-                                            'authcode': authcode,
-                                            'success': success,
-                                            'staged_to': hostname(),
-                                            'path': dst_path,
-                                            'msg': msg})
+    success = True
+  treq_result = treq.get(callback, params={'job_id': job_id,
+                                           'product_id': product_id,
+                                           'authcode': authcode,
+                                           'success': success,
+                                           'staged_to': hostname(),
+                                           'path': dst_path,
+                                           'msg': msg})
   treq_result.addCallback(lambda r: log.info("Staging of product %s reported (result: %s)" % (product_id, r.code)))
   treq_result.addErrback(lambda e: _handle_reporting_error(e, product_id, callback))
 
-@route ('/')
+@route('/')
 def root(request):
   request.setHeader('Content-Type', 'application/json')
 
   # Verify authorization
-  #if request.getUser() != 'username' or request.getPassword() != 'password':
-  #  request.setResponseCode(403)
-  #  return json.dumps({'status': 'Invalid username and/or password'})
+  # if request.getUser() != 'username' or request.getPassword() != 'password':
+  #   request.setResponseCode(403)
+  #   return json.dumps({'status': 'Invalid username and/or password'})
 
   # Verify parameters
   try:

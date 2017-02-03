@@ -17,8 +17,6 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 import json
 import pika
 import random
@@ -33,12 +31,14 @@ from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 from urlparse import urlparse
 
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
+
 class SubmitException (Exception):
   def __init__(self, msg=None, job_id=None):
     self.msg = msg
     self.job_id = job_id
-  def toJSON (self):
-    result = { 'error': True, 'job_id': self.job_id, 'msg': self.msg }
+  def toJSON(self):
+    result = {'error': True, 'job_id': self.job_id, 'msg': self.msg}
     return json.dumps(result) + "\n"
 
 # API function fall: submitTransfer
@@ -59,7 +59,7 @@ class TransferSubmit (Resource):
                                                      delivery_mode=1)
 
   def render_POST(self, request):
-  	# Check fields and return an error if any are missing
+    # Check fields and return an error if any are missing
     for formvar in ['product_id', 'destination_path']:
       if formvar not in request.args:
         request.setResponseCode(400)
@@ -156,8 +156,7 @@ class TransferSubmit (Resource):
         }
         request.write(json.dumps(result) + "\n")
       request.finish()
-      #return(e)
-        
+
     d = self.dbpool.runInteraction(_add_initial)
     d.addCallback(_add_to_rabbitmq)
     d.addCallback(lambda _: self.dbpool.runInteraction(_update_job_status_submitted))

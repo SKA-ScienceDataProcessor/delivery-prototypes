@@ -17,8 +17,6 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 import json
 import pika
 import random
@@ -30,6 +28,8 @@ from sys import stderr
 from twisted.internet import defer, reactor
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.logger import Logger
+
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 @inlineCallbacks
 def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path, msg):
@@ -114,7 +114,7 @@ def send_to_staging(job_id, token_len=32):
     yield sem_staging.release()
     returnValue(None)
   authcode = ''.join(random.choice(string.lowercase) for i in range(token_len))
-  
+
   # Update job status to staging and add callback code
   try:
     yield dbpool.runQuery("UPDATE jobs SET status = 'STAGING', time_staging = now(), "
@@ -124,7 +124,7 @@ def send_to_staging(job_id, token_len=32):
                     'for job %s' % job_id)
     yield sem_staging.release()
     returnValue(None)
-  
+
   # Contact the stager to initiate the transfer process
   params = {
     'job_id': job_id,
@@ -152,8 +152,6 @@ def staging_queue_listener():
   global staging_queue
   global sem_staging
 
-  #yield log.info("About to bind to staging queue")
-
   channel = yield conn.channel()
   queue = yield channel.queue_declare(queue=staging_queue,
                                       exclusive=False,
@@ -164,10 +162,8 @@ def staging_queue_listener():
   queue_object, consumer_tag = yield channel.basic_consume(queue=staging_queue,
                                                            no_ack=False)
   while True:
-    #yield log.debug("about to acquire semaphore")
     yield sem_staging.acquire()
-    #yield log.debug("semaphore acquired")
-    ch,method,properties,body = yield queue_object.get()
+    ch, method, properties, body = yield queue_object.get()
     if body:
       reactor.callInThread(send_to_staging, [body])
       yield ch.basic_ack(delivery_tag=method.delivery_tag)
@@ -183,7 +179,7 @@ def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
   global stager_url
   global stager_callback
   global transfer_queue
-  
+
   log = Logger()
   twisted.python.log.startLogging(stderr)
 

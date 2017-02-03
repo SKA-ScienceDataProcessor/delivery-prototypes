@@ -17,8 +17,6 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 import fts3.rest.client.easy as fts3
 import json
 import os
@@ -32,6 +30,8 @@ from twisted.internet import reactor
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.internet.task import LoopingCall
 from twisted.logger import Logger
+
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 # FTS Updater
 # (scans FTS server at a regular interval, updating the status of pending tasks)
@@ -138,7 +138,6 @@ def _start_fts_transfer(job_id):
     dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = %s WHERE "
                     "job_id = %s", [ds, job_id])
     returnValue(None)
-  
 
   # Update job status, add FTS job ID & FTS status
   try:
@@ -151,7 +150,7 @@ def _start_fts_transfer(job_id):
     ds = "Error updating job status following FTS submission"
     dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = %s WHERE "
                     "job_id = %s", [ds, job_id])
-   
+
     returnValue(None)
   log.info('Job database updated; add FTS ID %s for job %s' % (fts_jobid, job_id))
 
@@ -173,7 +172,7 @@ def _transfer_queue_listener():
                                                            no_ack=False)
   while True:
     yield sem_fts.acquire()
-    ch,method,properties,body = yield queue_object.get()
+    ch, method, properties, body = yield queue_object.get()
     if body:
       reactor.callInThread(_start_fts_transfer, body)
       yield ch.basic_ack(delivery_tag=method.delivery_tag)

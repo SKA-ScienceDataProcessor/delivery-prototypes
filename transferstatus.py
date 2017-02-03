@@ -17,14 +17,14 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 import json
 
 from datetime import datetime
 from twisted.logger import Logger
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
+
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 # API function fall: getStatus
 # (allow users to query the results of their transfer request)
@@ -59,17 +59,14 @@ class TransferStatus (Resource):
                   'time_staging', 'time_staging_finished', 'time_transferring',
                   'time_error', 'time_success']
         results = dict(zip(fields, result))
-        def serialize_with_datetime (obj):
-          if isinstance(obj,datetime):
+        def serialize_with_datetime(obj):
+          if isinstance(obj, datetime):
             return obj.isoformat()
-          raise TypeError ("Type not serializable")
+          raise TypeError("Type not serializable")
         request.write(json.dumps(results, default=serialize_with_datetime) + "\n")
-        #self.log.debug(str(result))
-        #request.write("should report status of request for job {0}".format(
-        #              request.args['job_id'][0]))
       else:
         request.setResponseCode(404)
-        result = { 'msg': "job_id {0} not found".format(job_id) }
+        result = {'msg': "job_id {0} not found".format(job_id)}
         request.write(json.dumps(result) + "\n")
       request.finish()
 

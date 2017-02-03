@@ -17,14 +17,13 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
+from staging import finish_staging
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.logger import Logger
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 
-from staging import finish_staging
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 # API function fall: doneStaging
 # (have the stager signal that a job has been staged to local disk)
@@ -44,7 +43,7 @@ class StagingFinish (Resource):
         'staged_to': request.args['staged_to'][0],
         'path': request.args['path'][0],
         'msg': request.args['msg'][0]
-      }    
+      }
     except Exception:
       self.log.error('Invalid arguments calling doneStaging')
       request.setResponseCode(400)
@@ -67,7 +66,7 @@ class StagingFinish (Resource):
     d = finish_staging(**params)
     d.addCallback(_handle_finish_staging_result)
     d.addErrback(_handle_finish_staging_error)
-    
+
     return NOT_DONE_YET
   def render_POST(self, request):
     return self.render_GET(request)

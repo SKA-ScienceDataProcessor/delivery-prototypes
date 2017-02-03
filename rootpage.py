@@ -17,10 +17,10 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 from twisted.logger import Logger
 from twisted.web.resource import Resource
+
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 # Setup a root website
 class RootPage (Resource):
@@ -29,4 +29,3 @@ class RootPage (Resource):
     self.log = Logger()
   def render_GET(self, request):
     return "Transfer Service Prototype\n"
-

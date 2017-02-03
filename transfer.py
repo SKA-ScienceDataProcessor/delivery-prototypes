@@ -17,28 +17,21 @@
 
 from __future__ import print_function # for python 2
 
-__author__ = "David Aikema, <david.aikema@uct.ac.za>"
-
 import ConfigParser
-#import json
-#import os
 import pika
 import sys
 import time
 
 from OpenSSL import SSL, crypto
 from os.path import realpath, dirname, join
-#from pika import exceptions
 from pika.adapters import twisted_connection
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-#from twisted.internet.task import LoopingCall
 from twisted.logger import globalLogPublisher, FileLogObserver, formatEvent, Logger
-#from twisted.python.modules import getModule
 from twisted.web.resource import Resource
-from twisted.web.server import Site #, NOT_DONE_YET
+from twisted.web.server import Site
 
 # The web pages
 from rootpage import RootPage
@@ -46,9 +39,11 @@ from stagingfinish import StagingFinish
 from transfersubmit import TransferSubmit
 from transferstatus import TransferStatus
 
-# From 
+# FTS and Staging backends
 from staging import init_staging
 from ftsmanager import init_fts_manager
+
+__author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 class PIKAReconnectingClientFactory(ReconnectingClientFactory):
 
@@ -73,14 +68,14 @@ class PIKAReconnectingClientFactory(ReconnectingClientFactory):
     log.info('Unable to connect to rabbitmq: ' + str(reason))
     ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
 
-def main ():
+def main():
   global dbpool
   global log
   global configData
 
   log = Logger()
   log.info("About to initialize logging")
-  observer=FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
+  observer = FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
   globalLogPublisher.addObserver(observer)
   log.info("Initialized logging")
 
@@ -101,7 +96,7 @@ def main ():
   # Launch server
   root = RootPage()
   root.putChild('', root)
-  
+
   # Retrieve values needed for rabbit mq connections
   host = configData.get('ampq', 'hostname')
   staging_queue = configData.get('ampq', 'staging_queue')
@@ -114,7 +109,7 @@ def main ():
     root.putChild('submitTransfer', t_submit)
     root.putChild('transferStatus', TransferStatus(dbpool))
     root.putChild('doneStaging', StagingFinish(dbpool))
-    
+
     staging_concurrent_max = configData.get('staging', 'concurrent_max')
     staging_url = configData.get('staging', 'server')
     staging_callback = configData.get('staging', 'callback')
@@ -134,9 +129,9 @@ def main ():
   d = cc.connectTCP(host, 5672)
   d.addCallback(lambda protocol: protocol.ready)
   d.addCallback(setup_nodes)
-  #prcf = PIKAReconnectingClientFactory()
-  #conn = reactor.connectTCP(host, 5672, prcf)
-  #setup_nodes(conn)
+  # prcf = PIKAReconnectingClientFactory()
+  # conn = reactor.connectTCP(host, 5672, prcf)
+  # setup_nodes(conn)
 
   # Setup HTTP
   factory = Site(root)
@@ -147,7 +142,7 @@ def main ():
   ssl_cert = configData.get('ssl', 'cert')
   ssl_key = configData.get('ssl', 'key')
   ssl_trust_chain = configData.get('ssl', 'chain')
-  ctx_opt= {}
+  ctx_opt = {}
   with open(ssl_cert, 'r') as f:
     ctx_opt['certificate'] = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
   with open(ssl_key, 'r') as f:
@@ -165,15 +160,15 @@ def main ():
   ctx_opt['extraCertChain'] = certchain_objs
   ctx_opt['enableSingleUseKeys'] = True
   ctx_opt['enableSessions'] = True
-  #ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
-  #ctx_opt['verify'] = True
-  #ctx_opt['requireCertificate'] = False
-  #ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
-  #ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
-  #sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443, ssl_ctx_factory)
-  #sslendpoint.listen(factory)
+  # ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
+  # ctx_opt['verify'] = True
+  # ctx_opt['requireCertificate'] = False
+  # ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
+  # ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
+  # sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443, ssl_ctx_factory)
+  # sslendpoint.listen(factory)
 
   reactor.run()
 
 if __name__ == '__main__':
-  main()	
+  main()
