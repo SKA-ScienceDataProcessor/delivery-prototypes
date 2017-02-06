@@ -103,6 +103,44 @@ tasks. It allows requests to use either GET or POST methods.
 * 403: If the request was unauthorized
 * 500: If there was an error detecting when processing the report
 
+Configuration file
+===
+
+The application looks for its configuration file first at `~/.transfer.cfg`, and if this
+fails instead uses the file `transfer.cfg` in the application directory.
+
+The application uses [ConfigParser](https://docs.python.org/2/library/configparser.html)
+with its INI-style formatting of the file.  It has the following fields:
+
+* `ssl` section
+
+  * `cert`: SSL certificate file
+  * `key`: SSL key file
+  * `chain`: Certificate chain to ensure that the certificate will be trusted
+
+* `mysql` section
+  * `hostname`: Hostname of the database server
+  * `username` and `password`: Credentials to connect to the database server with
+  * `db`: Name of the database
+
+* `ampq` section
+  * `hostname`: Hostname of the rabbitmq server
+  * `staging_queue`: Name of the queue in which staging requests are to be stored
+  * `transfer_queue`: Name of the queue in which transfer requests are to be stored
+
+* `staging` section
+  * `concurrent_max`: The maximum number of concurrent staging jobs to allow
+  * `server`: URL of the staging server interface
+  * `callback`: URL to contact once the staging has been completed
+
+* `fts` section
+  * `server`: URL of the FTS server endpoint
+  * `proxy`: Location of a valid X.509 proxy certificate to use
+  * `concurrent_max`: The maximum number of concurrent transfer tasks allowed
+  * `polling_interval`: The interval in seconds between instances in which the FTS
+    server is polled.
+
+
 Database description
 ===
 
@@ -135,11 +173,6 @@ PRIMARY KEY (job_id));
 TODO
 ===
 
-* Implement interaction with FTS.
-
-* Document configuration file settings. Support configuration files stored
-  outside the source code.
-
 * Rewrite start to launch using twistd rather than the current config script.
 
 * Support timeouts in case of stager failure
@@ -160,6 +193,12 @@ TODO
 
 * Maybe update the name of the detailed_status field to extra_status given that it's not
   really used frequently.
+  
+* Ensure the user credentials are handled better.  For now dependent on environment
+  variables and the credentials are not assumed to expire.  This should **not** be run
+  in a production environment.
+
+* Better handling of missing values in config file
 
 Known issues
 ===
@@ -181,6 +220,7 @@ Known issues
 * Currently using non-persistant rabbitmq queues for simplicity of clearing invalid
   entries.  This obviously should not be the case in a production environment.
 
+* FTS transfers currently use default settings
 
 Notes
 ===

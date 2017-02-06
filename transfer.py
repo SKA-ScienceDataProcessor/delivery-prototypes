@@ -22,14 +22,14 @@ import pika
 import sys
 import time
 
-from OpenSSL import SSL, crypto
-from os.path import realpath, dirname, join
+from OpenSSL import crypto, SSL
+from os.path import dirname, exists, expanduser, join, realpath
 from pika.adapters import twisted_connection
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-from twisted.logger import globalLogPublisher, FileLogObserver, formatEvent, Logger
+from twisted.logger import FileLogObserver, formatEvent, globalLogPublisher, Logger
 from twisted.web.resource import Resource
 from twisted.web.server import Site
 
@@ -80,14 +80,16 @@ def main():
   log.info("Initialized logging")
 
   # Load settings
-  cfg_file = join(dirname(realpath(__file__)), 'transfer.cfg')
+  cfg_file = expanduser('~/.transfer.cfg')
+  if not exists(cfg_file):
+    cfg_file = join(dirname(realpath(__file__)), 'transfer.cfg')
   log.debug("Loading config from {0}".format(cfg_file))
   configData = ConfigParser.ConfigParser()
   configData.read(cfg_file)
 
   # Establish DB connection
   dbpool = adbapi.ConnectionPool('MySQLdb',
-                                 host=configData.get('mysql', 'host'),
+                                 host=configData.get('mysql', 'hostname'),
                                  user=configData.get('mysql', 'username'),
                                  passwd=configData.get('mysql', 'password'),
                                  db=configData.get('mysql', 'db'))
