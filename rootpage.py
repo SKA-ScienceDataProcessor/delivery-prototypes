@@ -15,17 +15,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 from twisted.logger import Logger
 from twisted.web.resource import Resource
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
+
 # Setup a root website
 class RootPage (Resource):
   def __init__(self):
     Resource.__init__(self)
     self.log = Logger()
+
   def render_GET(self, request):
     return "Transfer Service Prototype\n"

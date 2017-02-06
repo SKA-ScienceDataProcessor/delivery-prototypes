@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 import ConfigParser
 import json
@@ -31,6 +31,7 @@ from twisted.internet import defer, reactor
 from twisted.logger import Logger
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
+
 
 @defer.inlineCallbacks
 def process_staging_request(job_id, product_id, callback, authcode):
@@ -74,6 +75,7 @@ def process_staging_request(job_id, product_id, callback, authcode):
                                            'msg': msg})
   treq_result.addCallback(lambda r: log.info("Staging of product %s reported (result: %s)" % (product_id, r.code)))
   treq_result.addErrback(lambda e: _handle_reporting_error(e, product_id, callback))
+
 
 @route('/')
 def root(request):

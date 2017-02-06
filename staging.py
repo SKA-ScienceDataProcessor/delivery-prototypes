@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 import json
 import pika
@@ -30,6 +30,7 @@ from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnVal
 from twisted.logger import Logger
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
+
 
 @inlineCallbacks
 def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path, msg):
@@ -85,6 +86,7 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to, path
   yield sem_staging.release()
   yield log.info("Completed staging of %s" % job_id)
   returnValue(True)
+
 
 @inlineCallbacks
 def send_to_staging(job_id, token_len=32):
@@ -145,6 +147,7 @@ def send_to_staging(job_id, token_len=32):
 
   yield log.info('Finished submitting job %s to stager' % job_id)
 
+
 @inlineCallbacks
 def staging_queue_listener():
   global log
@@ -167,6 +170,7 @@ def staging_queue_listener():
     if body:
       reactor.callInThread(send_to_staging, [body])
       yield ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 @inlineCallbacks
 def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,

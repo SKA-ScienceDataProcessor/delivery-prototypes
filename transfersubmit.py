@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 import json
 import pika
@@ -33,18 +33,23 @@ from urlparse import urlparse
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
+
 class SubmitException (Exception):
+
   def __init__(self, msg=None, job_id=None):
     self.msg = msg
     self.job_id = job_id
+
   def toJSON(self):
     result = {'error': True, 'job_id': self.job_id, 'msg': self.msg}
     return json.dumps(result) + "\n"
+
 
 # API function fall: submitTransfer
 # (submit a transfer)
 class TransferSubmit (Resource):
   isLeaf = True
+
   def __init__(self, dbpool, staging_queue, conn):
     Resource.__init__(self)
 

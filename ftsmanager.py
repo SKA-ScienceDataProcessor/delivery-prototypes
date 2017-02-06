@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 import fts3.rest.client.easy as fts3
 import json
@@ -32,6 +32,7 @@ from twisted.internet.task import LoopingCall
 from twisted.logger import Logger
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
+
 
 # FTS Updater
 # (scans FTS server at a regular interval, updating the status of pending tasks)
@@ -98,6 +99,7 @@ def _FTSUpdater():
     returnValue(None)
   log.info('FTS Updater finished updating jobs that were in transferring state')
 
+
 @inlineCallbacks
 def _start_fts_transfer(job_id):
   global log
@@ -154,6 +156,7 @@ def _start_fts_transfer(job_id):
     returnValue(None)
   log.info('Job database updated; add FTS ID %s for job %s' % (fts_jobid, job_id))
 
+
 @inlineCallbacks
 def _transfer_queue_listener():
   global log
@@ -178,6 +181,7 @@ def _transfer_queue_listener():
       yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
   pass
+
 
 def init_fts_manager(l_conn, l_dbpool, fts_server, l_transfer_queue,
                      fts_concurrent_max, fts_polling_interval):

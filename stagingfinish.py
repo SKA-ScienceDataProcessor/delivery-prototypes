@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 from staging import finish_staging
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
@@ -25,14 +25,17 @@ from twisted.web.server import NOT_DONE_YET
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
+
 # API function fall: doneStaging
 # (have the stager signal that a job has been staged to local disk)
 class StagingFinish (Resource):
   isLeaf = True
+
   def __init__(self, dbpool):
     Resource.__init__(self)
     self.dbpool = dbpool
     self.log = Logger()
+
   def render_GET(self, request):
     try:
       params = {
@@ -57,6 +60,7 @@ class StagingFinish (Resource):
         request.setResponseCode(500)
       request.write('Finished processing staging callback\n')
       request.finish()
+
     def _handle_finish_staging_error(failure):
       self.log.error(failure)
       request.setResponseCode(500)
@@ -68,5 +72,6 @@ class StagingFinish (Resource):
     d.addErrback(_handle_finish_staging_error)
 
     return NOT_DONE_YET
+
   def render_POST(self, request):
     return self.render_GET(request)

@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 import json
 
@@ -26,14 +26,17 @@ from twisted.web.server import NOT_DONE_YET
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
+
 # API function fall: getStatus
 # (allow users to query the results of their transfer request)
 class TransferStatus (Resource):
   isLeaf = True
+
   def __init__(self, dbpool):
     Resource.__init__(self)
     self.dbpool = dbpool
     self.log = Logger()
+
   def render_GET(self, request):
     if 'job_id' not in request.args:
       result = {
@@ -59,11 +62,12 @@ class TransferStatus (Resource):
                   'time_staging', 'time_staging_finished', 'time_transferring',
                   'time_error', 'time_success']
         results = dict(zip(fields, result))
-        def serialize_with_datetime(obj):
+
+        def _serialize_with_datetime(obj):
           if isinstance(obj, datetime):
             return obj.isoformat()
           raise TypeError("Type not serializable")
-        request.write(json.dumps(results, default=serialize_with_datetime) + "\n")
+        request.write(json.dumps(results, default=_serialize_with_datetime) + "\n")
       else:
         request.setResponseCode(404)
         result = {'msg': "job_id {0} not found".format(job_id)}
@@ -71,6 +75,7 @@ class TransferStatus (Resource):
       request.finish()
 
     d = self.dbpool.runInteraction(report_results)
+
     def report_db_error(e):
       self.log.error(e)
       result = {

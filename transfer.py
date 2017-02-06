@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function # for python 2
+from __future__ import print_function  # for python 2
 
 import ConfigParser
 import pika
@@ -45,11 +45,13 @@ from ftsmanager import init_fts_manager
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
+
 class PIKAReconnectingClientFactory(ReconnectingClientFactory):
 
   def startedConnecting(self, conn):
     global log
     log.info('About to connect to rabbitmq')
+
   @inlineCallbacks
   def buildProtocol(self, addr):
     global log
@@ -59,14 +61,17 @@ class PIKAReconnectingClientFactory(ReconnectingClientFactory):
     tc = twisted_connection.TwistedProtocolConnection(p)
     yield tc.ready
     returnValue(tc)
+
   def clientConnectionLost(self, conn, reason):
     global log
     log.info('Lost connection to rabbitmq: ' + str(reason))
     ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
+
   def clientConnectionFailed(self, conn, reason):
     global log
     log.info('Unable to connect to rabbitmq: ' + str(reason))
     ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
+
 
 def main():
   global dbpool
@@ -141,16 +146,16 @@ def main():
   endpoint.listen(factory)
 
   # Setup SSL
+  def _load_cert_function(x):
+    return crypto.load_certificate(crypto.FILETYPE_PEM, x)
   ssl_cert = configData.get('ssl', 'cert')
   ssl_key = configData.get('ssl', 'key')
   ssl_trust_chain = configData.get('ssl', 'chain')
   ctx_opt = {}
   with open(ssl_cert, 'r') as f:
-    ctx_opt['certificate'] = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+    ctx_opt['certificate'] = _load_cert_function(f.read())
   with open(ssl_key, 'r') as f:
     ctx_opt['privateKey'] = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
-  load_cert_function = lambda(x): \
-    crypto.load_certificate(crypto.FILETYPE_PEM, x)
   with open(ssl_trust_chain, 'r') as f:
     certchain = []
     for line in f:
@@ -158,7 +163,7 @@ def main():
         certchain.append(line)
       else:
         certchain[-1] = certchain[-1] + line
-  certchain_objs = map(load_cert_function, certchain)
+  certchain_objs = map(_load_cert_function, certchain)
   ctx_opt['extraCertChain'] = certchain_objs
   ctx_opt['enableSingleUseKeys'] = True
   ctx_opt['enableSessions'] = True
