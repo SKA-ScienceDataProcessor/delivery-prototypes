@@ -27,9 +27,11 @@ from os.path import dirname, exists, expanduser, join, realpath
 from pika.adapters import twisted_connection
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
-from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, returnValue
+from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
+                                   returnValue
 from twisted.internet.protocol import Protocol, ReconnectingClientFactory
-from twisted.logger import FileLogObserver, formatEvent, globalLogPublisher, Logger
+from twisted.logger import FileLogObserver, formatEvent, \
+                           globalLogPublisher, Logger
 from twisted.web.resource import Resource
 from twisted.web.server import Site
 
@@ -48,134 +50,137 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 class PIKAReconnectingClientFactory(ReconnectingClientFactory):
 
-  def startedConnecting(self, conn):
-    global log
-    log.info('About to connect to rabbitmq')
+    def startedConnecting(self, conn):
+        global log
+        log.info('About to connect to rabbitmq')
 
-  @inlineCallbacks
-  def buildProtocol(self, addr):
-    global log
-    log.info('Connected')
-    self.resetDelay()
-    p = pika.ConnectionParameters()
-    tc = twisted_connection.TwistedProtocolConnection(p)
-    yield tc.ready
-    returnValue(tc)
+    @inlineCallbacks
+    def buildProtocol(self, addr):
+        global log
+        log.info('Connected')
+        self.resetDelay()
+        p = pika.ConnectionParameters()
+        tc = twisted_connection.TwistedProtocolConnection(p)
+        yield tc.ready
+        returnValue(tc)
 
-  def clientConnectionLost(self, conn, reason):
-    global log
-    log.info('Lost connection to rabbitmq: ' + str(reason))
-    ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
+    def clientConnectionLost(self, conn, reason):
+        global log
+        log.info('Lost connection to rabbitmq: ' + str(reason))
+        ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
 
-  def clientConnectionFailed(self, conn, reason):
-    global log
-    log.info('Unable to connect to rabbitmq: ' + str(reason))
-    ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
+    def clientConnectionFailed(self, conn, reason):
+        global log
+        log.info('Unable to connect to rabbitmq: ' + str(reason))
+        ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
 
 
 def main():
-  global dbpool
-  global log
-  global configData
+    global dbpool
+    global log
+    global configData
 
-  log = Logger()
-  log.info("About to initialize logging")
-  observer = FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
-  globalLogPublisher.addObserver(observer)
-  log.info("Initialized logging")
+    log = Logger()
+    log.info("About to initialize logging")
+    observer = FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
+    globalLogPublisher.addObserver(observer)
+    log.info("Initialized logging")
 
-  # Load settings
-  cfg_file = expanduser('~/.transfer.cfg')
-  if not exists(cfg_file):
-    cfg_file = join(dirname(realpath(__file__)), 'transfer.cfg')
-  log.debug("Loading config from {0}".format(cfg_file))
-  configData = ConfigParser.ConfigParser()
-  configData.read(cfg_file)
+    # Load settings
+    cfg_file = expanduser('~/.transfer.cfg')
+    if not exists(cfg_file):
+        cfg_file = join(dirname(realpath(__file__)), 'transfer.cfg')
+    log.debug("Loading config from {0}".format(cfg_file))
+    configData = ConfigParser.ConfigParser()
+    configData.read(cfg_file)
 
-  # Establish DB connection
-  dbpool = adbapi.ConnectionPool('MySQLdb',
-                                 host=configData.get('mysql', 'hostname'),
-                                 user=configData.get('mysql', 'username'),
-                                 passwd=configData.get('mysql', 'password'),
-                                 db=configData.get('mysql', 'db'))
-  log.info("DB Connection Established")
+    # Establish DB connection
+    dbpool = adbapi.ConnectionPool('MySQLdb',
+                                   host=configData.get('mysql', 'hostname'),
+                                   user=configData.get('mysql', 'username'),
+                                   passwd=configData.get('mysql', 'password'),
+                                   db=configData.get('mysql', 'db'))
+    log.info("DB Connection Established")
 
-  # Launch server
-  root = RootPage()
-  root.putChild('', root)
+    # Launch server
+    root = RootPage()
+    root.putChild('', root)
 
-  # Retrieve values needed for rabbit mq connections
-  host = configData.get('ampq', 'hostname')
-  staging_queue = configData.get('ampq', 'staging_queue')
-  transfer_queue = configData.get('ampq', 'transfer_queue')
+    # Retrieve values needed for rabbit mq connections
+    host = configData.get('ampq', 'hostname')
+    staging_queue = configData.get('ampq', 'staging_queue')
+    transfer_queue = configData.get('ampq', 'transfer_queue')
 
-  # Setup connection and initialize web interface and fts + staging managers
-  def setup_nodes(conn):
-    # Setup web interface portions
-    t_submit = TransferSubmit(dbpool, staging_queue, conn)
-    root.putChild('submitTransfer', t_submit)
-    root.putChild('transferStatus', TransferStatus(dbpool))
-    root.putChild('doneStaging', StagingFinish(dbpool))
+    # Setup connection and initialize web interface & fts + staging managers
+    def setup_nodes(conn):
+        # Setup web interface portions
+        t_submit = TransferSubmit(dbpool, staging_queue, conn)
+        root.putChild('submitTransfer', t_submit)
+        root.putChild('transferStatus', TransferStatus(dbpool))
+        root.putChild('doneStaging', StagingFinish(dbpool))
 
-    staging_concurrent_max = configData.get('staging', 'concurrent_max')
-    staging_url = configData.get('staging', 'server')
-    staging_callback = configData.get('staging', 'callback')
+        staging_concurrent_max = configData.get('staging', 'concurrent_max')
+        staging_url = configData.get('staging', 'server')
+        staging_callback = configData.get('staging', 'callback')
 
-    init_staging(conn, dbpool, staging_queue, staging_concurrent_max,
-                 staging_url, staging_callback, transfer_queue)
-    fts_server = configData.get('fts', 'server')
-    fts_concurrent_max = configData.get('fts', 'concurrent_max')
-    fts_interval = configData.get('fts', 'polling_interval')
-    init_fts_manager(conn, dbpool, fts_server, transfer_queue,
-                     fts_concurrent_max, fts_interval)
+        init_staging(conn, dbpool, staging_queue, staging_concurrent_max,
+                     staging_url, staging_callback, transfer_queue)
+        fts_server = configData.get('fts', 'server')
+        fts_concurrent_max = configData.get('fts', 'concurrent_max')
+        fts_interval = configData.get('fts', 'polling_interval')
+        init_fts_manager(conn, dbpool, fts_server, transfer_queue,
+                         fts_concurrent_max, fts_interval)
 
-  parameters = pika.ConnectionParameters()
-  cc = protocol.ClientCreator(reactor,
-                              twisted_connection.TwistedProtocolConnection,
-                              parameters)
-  d = cc.connectTCP(host, 5672)
-  d.addCallback(lambda protocol: protocol.ready)
-  d.addCallback(setup_nodes)
-  # prcf = PIKAReconnectingClientFactory()
-  # conn = reactor.connectTCP(host, 5672, prcf)
-  # setup_nodes(conn)
+    parameters = pika.ConnectionParameters()
+    cc = protocol.ClientCreator(reactor,
+                                twisted_connection.TwistedProtocolConnection,
+                                parameters)
+    d = cc.connectTCP(host, 5672)
+    d.addCallback(lambda protocol: protocol.ready)
+    d.addCallback(setup_nodes)
+    # prcf = PIKAReconnectingClientFactory()
+    # conn = reactor.connectTCP(host, 5672, prcf)
+    # setup_nodes(conn)
 
-  # Setup HTTP
-  factory = Site(root)
-  endpoint = endpoints.TCP4ServerEndpoint(reactor, 8080, interface='127.0.0.1')
-  endpoint.listen(factory)
+    # Setup HTTP
+    factory = Site(root)
+    endpoint = endpoints.TCP4ServerEndpoint(reactor, 8080,
+                                            interface='127.0.0.1')
+    endpoint.listen(factory)
 
-  # Setup SSL
-  def _load_cert_function(x):
-    return crypto.load_certificate(crypto.FILETYPE_PEM, x)
-  ssl_cert = configData.get('ssl', 'cert')
-  ssl_key = configData.get('ssl', 'key')
-  ssl_trust_chain = configData.get('ssl', 'chain')
-  ctx_opt = {}
-  with open(ssl_cert, 'r') as f:
-    ctx_opt['certificate'] = _load_cert_function(f.read())
-  with open(ssl_key, 'r') as f:
-    ctx_opt['privateKey'] = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
-  with open(ssl_trust_chain, 'r') as f:
-    certchain = []
-    for line in f:
-      if '-----BEGIN CERTIFICATE-----' in line:
-        certchain.append(line)
-      else:
-        certchain[-1] = certchain[-1] + line
-  certchain_objs = map(_load_cert_function, certchain)
-  ctx_opt['extraCertChain'] = certchain_objs
-  ctx_opt['enableSingleUseKeys'] = True
-  ctx_opt['enableSessions'] = True
-  # ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
-  # ctx_opt['verify'] = True
-  # ctx_opt['requireCertificate'] = False
-  # ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
-  # ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
-  # sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443, ssl_ctx_factory)
-  # sslendpoint.listen(factory)
+    # Setup SSL
+    def _load_cert_function(x):
+        return crypto.load_certificate(crypto.FILETYPE_PEM, x)
+    ssl_cert = configData.get('ssl', 'cert')
+    ssl_key = configData.get('ssl', 'key')
+    ssl_trust_chain = configData.get('ssl', 'chain')
+    ctx_opt = {}
+    with open(ssl_cert, 'r') as f:
+        ctx_opt['certificate'] = _load_cert_function(f.read())
+    with open(ssl_key, 'r') as f:
+        ctx_opt['privateKey'] = crypto.load_privatekey(crypto.FILETYPE_PEM,
+                                                       f.read())
+    with open(ssl_trust_chain, 'r') as f:
+        certchain = []
+        for line in f:
+            if '-----BEGIN CERTIFICATE-----' in line:
+                certchain.append(line)
+            else:
+                certchain[-1] = certchain[-1] + line
+    certchain_objs = map(_load_cert_function, certchain)
+    ctx_opt['extraCertChain'] = certchain_objs
+    ctx_opt['enableSingleUseKeys'] = True
+    ctx_opt['enableSessions'] = True
+    # ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
+    # ctx_opt['verify'] = True
+    # ctx_opt['requireCertificate'] = False
+    # ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
+    # ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
+    # sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443,
+    #                                            ssl_ctx_factory)
+    # sslendpoint.listen(factory)
 
-  reactor.run()
+    reactor.run()
 
 if __name__ == '__main__':
-  main()
+    main()

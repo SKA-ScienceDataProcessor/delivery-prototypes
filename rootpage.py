@@ -25,9 +25,9 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 # Setup a root website
 class RootPage (Resource):
-  def __init__(self):
-    Resource.__init__(self)
-    self.log = Logger()
+    def __init__(self):
+        Resource.__init__(self)
+        self.log = Logger()
 
-  def render_GET(self, request):
-    return "Transfer Service Prototype\n"
+    def render_GET(self, request):
+        return "Transfer Service Prototype\n"
