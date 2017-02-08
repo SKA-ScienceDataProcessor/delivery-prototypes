@@ -100,7 +100,7 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to,
                                                     delivery_mode=1)
         channel = yield conn.channel()
         yield channel.queue_declare(queue=transfer_queue, exclusive=False,
-                                    durable=False)
+                                    durable=True)
         yield channel.basic_publish('', transfer_queue, job_id,
                                     pika_send_properties)
     except Exception, e:
@@ -206,7 +206,7 @@ def _staging_queue_listener():
     channel = yield conn.channel()
     queue = yield channel.queue_declare(queue=staging_queue,
                                         exclusive=False,
-                                        durable=False)
+                                        durable=True)
     yield channel.basic_qos(prefetch_count=1)
 
     # Enter loop

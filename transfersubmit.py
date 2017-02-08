@@ -149,7 +149,7 @@ class TransferSubmit (Resource):
             """Add the job to RabbitMQ."""
             channel = yield self.pika_conn.channel()
             yield channel.queue_declare(queue=self.staging_queue,
-                                        exclusive=False, durable=False)
+                                        exclusive=False, durable=True)
             yield channel.basic_publish('', self.staging_queue, job_uuid,
                                         self.pika_send_properties)
 

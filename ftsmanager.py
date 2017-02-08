@@ -182,7 +182,7 @@ def _transfer_queue_listener():
     channel = yield conn.channel()
     queue = yield channel.queue_declare(queue=transfer_queue,
                                         exclusive=False,
-                                        durable=False)
+                                        durable=True)
     yield channel.basic_qos(prefetch_count=1)
 
     # Enter loop

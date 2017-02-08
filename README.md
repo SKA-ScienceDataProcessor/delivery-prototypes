@@ -217,9 +217,6 @@ Known issues
   if this were implemented in this prototype then more information than just the job_id
   would likely need to be added to the queues.
 
-* Currently using non-persistant rabbitmq queues for simplicity of clearing invalid
-  entries.  This obviously should not be the case in a production environment.
-
 * FTS transfers currently use default settings
 
 Notes
