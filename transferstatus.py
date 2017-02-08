@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+"""Enable users to obtain status of transfers."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,17 +27,30 @@ from twisted.web.server import NOT_DONE_YET
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
-# API function fall: getStatus
-# (allow users to query the results of their transfer request)
 class TransferStatus (Resource):
+    """Allow users to query the results of their transfer request.
+
+    Mounted at /transferStatus.
+    """
+
     isLeaf = True
 
     def __init__(self, dbpool):
+        """Initialize transfer status query REST interface.
+
+        Arguments:
+        dbpool -- shared database connection pool
+        """
         Resource.__init__(self)
         self.dbpool = dbpool
         self.log = Logger()
 
     def render_GET(self, request):
+        """Process GET request for job status.
+
+        Required parameter:
+        job_id -- identifier of the job to get status of.
+        """
         if 'job_id' not in request.args:
             result = {
               'error': True,
@@ -46,7 +59,8 @@ class TransferStatus (Resource):
             request.setResponseCode(400)
             return json.dumps(result)
 
-        def report_results(txn):
+        def _report_results(txn):
+            """Query DB for job and report results to user."""
             job_id = request.args['job_id'][0]
             txn.execute("SELECT job_id, product_id, status, detailed_status, "
                         "destination_path, submitter, fts_jobid, fts_details, "
@@ -76,9 +90,8 @@ class TransferStatus (Resource):
                 request.write(json.dumps(result) + "\n")
             request.finish()
 
-        d = self.dbpool.runInteraction(report_results)
-
-        def report_db_error(e):
+        def _report_db_error(e):
+            """Report error if an issue was encountered getting job status."""
             self.log.error(e)
             result = {
               'error': True,
@@ -87,6 +100,8 @@ class TransferStatus (Resource):
             request.setResponseCode(500)
             request.write(json.dumps(result) + "\n")
             request.finish()
-        d.addErrback(report_db_error)
 
+        # Setup callbacks to return job status asynchronously
+        d = self.dbpool.runInteraction(_report_results)
+        d.addErrback(_report_db_error)
         return NOT_DONE_YET

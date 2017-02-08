@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+"""Root page for website."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,11 +23,14 @@ from twisted.web.resource import Resource
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
-# Setup a root website
 class RootPage (Resource):
+    """Basic root webpage template."""
+
     def __init__(self):
+        """Only make sure logging is initialized."""
         Resource.__init__(self)
         self.log = Logger()
 
     def render_GET(self, request):
+        """For now just return a basic message."""
         return "Transfer Service Prototype\n"

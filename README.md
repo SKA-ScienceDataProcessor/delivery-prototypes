@@ -187,8 +187,6 @@ TODO
 * Make sure that the error timestamp is being set when the job status is being changed
   to ERROR.  May want to do this at the DB level (for the other timestamps as well)
 
-* Create docstrings for functions
-
 * Update variable and function names in files to reflect their level of privateness
 
 * Maybe update the name of the detailed_status field to extra_status given that it's not
@@ -199,6 +197,8 @@ TODO
   in a production environment.
 
 * Better handling of missing values in config file
+
+* Test suite
 
 Known issues
 ===

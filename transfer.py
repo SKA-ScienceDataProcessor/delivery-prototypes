@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+"""Main function and global init routines for transfer service prototype."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ import time
 from OpenSSL import crypto, SSL
 from os.path import dirname, exists, expanduser, join, realpath
 from pika.adapters import twisted_connection
+from time import localtime, strftime
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
@@ -49,13 +50,16 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 class PIKAReconnectingClientFactory(ReconnectingClientFactory):
+    """Factory to auto-reconnect to RabbitMQ when disconnected."""
 
     def startedConnecting(self, conn):
+        """Call when initializing connection to RabbitMQ."""
         global log
         log.info('About to connect to rabbitmq')
 
     @inlineCallbacks
     def buildProtocol(self, addr):
+        """Used to build protocol object."""
         global log
         log.info('Connected')
         self.resetDelay()
@@ -65,23 +69,33 @@ class PIKAReconnectingClientFactory(ReconnectingClientFactory):
         returnValue(tc)
 
     def clientConnectionLost(self, conn, reason):
+        """Called when the connection to RabbitMQ was lost."""
         global log
         log.info('Lost connection to rabbitmq: ' + str(reason))
         ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
 
     def clientConnectionFailed(self, conn, reason):
+        """Called when connection attemp to RabbitMQ was unsuccessful."""
         global log
         log.info('Unable to connect to rabbitmq: ' + str(reason))
         ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
 
 
 def main():
+    """Main function for transfer service prototype.
+
+    This function:
+    * initializes connections to database and RabbitMQ
+    * sets up the web interface linkage
+    * calls staging and FTS initialization routines
+    * listens on the desired port
+    * ... and finally, starts reactor
+    """
     global dbpool
     global log
     global configData
 
     log = Logger()
-    log.info("About to initialize logging")
     observer = FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
     globalLogPublisher.addObserver(observer)
     log.info("Initialized logging")

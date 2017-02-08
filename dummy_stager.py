@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""A minimalist staging engine simulator.
 
+This service only binds to the loopback interface, performs no authorization
+checks, and maintains no state information about staging tasks either in
+process or completed.
+"""
 # Copyright 2017 University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -34,9 +39,9 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 @defer.inlineCallbacks
-def process_staging_request(job_id, product_id, callback, authcode):
-
-    log.info("process_staging_request (%s, %s, %s)"
+def _process_staging_request(job_id, product_id, callback, authcode):
+    """Process a staging request."""
+    log.info("_process_staging_request (%s, %s, %s)"
              % (product_id, callback, authcode))
 
     src_path = os.path.join(staging_src_dir, product_id)
@@ -84,6 +89,16 @@ def process_staging_request(job_id, product_id, callback, authcode):
 
 @route('/')
 def root(request):
+    """Called when a staging request has been received.
+
+    Required params:
+    job_id -- (Transfer service) identifier for the job being staged
+    product_id -- Product ID to be staged
+    callback -- URI of a transfer service URL to be called upon completion
+        of the staging tasks
+    authcode -- Used to verify the identity of the stager when calling
+        the callback URI.
+    """
     request.setHeader('Content-Type', 'application/json')
 
     # Verify authorization
@@ -106,7 +121,7 @@ def root(request):
                            'must be specified'})
 
     # Process request in separate thread
-    reactor.callInThread(process_staging_request, job_id, product_id,
+    reactor.callInThread(_process_staging_request, job_id, product_id,
                          callback, authcode)
     return json.dumps({'status': 'Request for product ID %s queued'
                       % product_id})

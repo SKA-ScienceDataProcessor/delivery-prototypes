@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+"""Listen for staging requests to arrive, and make calls to stager."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,6 +36,27 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 @inlineCallbacks
 def finish_staging(job_id, product_id, authcode, stager_success, staged_to,
                    path, msg):
+    """Update status when a staging task has been completed.
+
+    This is called by StagingFinish when it has received notification from
+    the stager that a task has been completed.
+
+    The function verifies the authcode recieved, updates the database to
+    reflect the completion of the task, and updates the semaphore to allow
+    another job to enter the STAGING portion of the transfer process.
+
+    Required parameters:
+    job_id -- ID of the job the product was staged as part of
+    product_id -- ID of the product that was staged
+    authcode -- Authcode used by the stager to verify its identity
+    stager_success -- Whether or not the stager reported success
+    staged_to -- Hostname of the system to which the product was staged
+    path -- Path of the staged file on the system it was staged to.
+    msg -- A message returned from the stager
+
+    Return value:
+    A boolean indicating whether or not an error was successfully processed.
+    """
     global transfer_queue
     global conn
     global sem_staging
@@ -95,7 +116,15 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to,
 
 
 @inlineCallbacks
-def send_to_staging(job_id, token_len=32):
+def _send_to_staging(job_id, token_len=32):
+    """Make call to stager to process job and update DB accordingly.
+
+    Params:
+    job_id -- Identifier of the job to stage
+    token_len -- Optional value specifying the length of the authcode
+      token passed to the stager for it to verify its identity when
+      reporting the completion of the staging process.
+    """
     global log
     global dbpool
     global sem_staging
@@ -162,7 +191,13 @@ def send_to_staging(job_id, token_len=32):
 
 
 @inlineCallbacks
-def staging_queue_listener():
+def _staging_queue_listener():
+    """Listen to the staging queue and handle requests.
+
+    Actual processing of the incoming requests is done in a separate thread
+    as setup here. Note that a semaphore is used to ensure that only a fixed
+    number of jobs can be in staging process at one time.
+    """
     global log
     global conn
     global staging_queue
@@ -181,13 +216,32 @@ def staging_queue_listener():
         yield sem_staging.acquire()
         ch, method, properties, body = yield queue.get()
         if body:
-            reactor.callInThread(send_to_staging, [body])
+            reactor.callInThread(_send_to_staging, [body])
             yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 @inlineCallbacks
 def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
                  s_callback, l_transfer_queue):
+    """Initialize thread to manage the staging process.
+
+    Note that this function also initializes a semaphore used to enforce a
+    limit on the maximum number of staging tasks which are permitted to be
+    done in parallel.
+
+    Parameters:
+    l_conn -- Globally shared RabbitMQ connection
+    l_dbpool -- Globally shared database connection pool
+    l_staging_queue -- Name of RabbitMQ queue to which staging requests are
+      beging sent.
+    max_concurrent -- Maximum number of jobs permitted to be in the STAGING
+      state at any point in time
+    s_url -- URI of the stager
+    s_callback -- Callback which the stager should contact once staging has
+      been completed.
+    l_transfer_queue -- Name of the RabbitMQ queue to which transfer requests
+      should be sent.
+    """
     global log
     global conn
     global dbpool
@@ -211,4 +265,4 @@ def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
     stager_callback = s_callback
     transfer_queue = l_transfer_queue
 
-    reactor.callInThread(staging_queue_listener)
+    reactor.callInThread(_staging_queue_listener)

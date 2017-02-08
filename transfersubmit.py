@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+"""Handle job submissions."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,22 +35,38 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 class SubmitException (Exception):
+    """Track submit errors with option message and job ID.
+
+    This is mounted at /submitTransfer.
+    """
 
     def __init__(self, msg=None, job_id=None):
+        """Denote an error, potentially associated with a message or job ID."""
         self.msg = msg
         self.job_id = job_id
 
     def toJSON(self):
+        """Return error report in JSON format."""
         result = {'error': True, 'job_id': self.job_id, 'msg': self.msg}
         return json.dumps(result) + "\n"
 
 
-# API function fall: submitTransfer
-# (submit a transfer)
 class TransferSubmit (Resource):
+    """Manage job submission, updating DB and RabbitMQ.
+
+    Mounted at /submitTransfer.
+    """
+
     isLeaf = True
 
     def __init__(self, dbpool, staging_queue, conn):
+        """Initialize transfer submission REST interface.
+
+        Arguments:
+        dbpool -- shared database connection pool
+        staging_queue -- named of the RabbitMQ queue to submit transfers to
+        conn -- shared connection to RabbitMQ
+        """
         Resource.__init__(self)
 
         # Use global logger and database pool
@@ -64,6 +80,13 @@ class TransferSubmit (Resource):
         self.pika_send_properties = bp
 
     def render_POST(self, request):
+        """Manage POST request with job submission.
+
+        The request must contain the following parameters:
+        product_id --- Unique identifier of the product being requested
+        destination_path --- A URI specifying a GridFTP server location
+            to transfer the product to.
+        """
         # Check fields and return an error if any are missing
         for formvar in ['product_id', 'destination_path']:
             if formvar not in request.args:
@@ -87,7 +110,7 @@ class TransferSubmit (Resource):
             request.setResponseCode(400)
             result = {
               'msg': 'destination_path must be a URL specifying '
-                     'a gsiftp server',
+                     'a GridFTP server',
               'job_id': None,
               'error': True,
             }
@@ -99,9 +122,15 @@ class TransferSubmit (Resource):
         job_uuid = str(uuid.uuid1())
         callback = ''.join(random.choice(string.lowercase) for i in range(32))
 
-        # Create database record
-        # (with status set to 'ERROR' until the job is added to rabbitmq)
         def _add_initial(txn):
+            """Create initial database record for job.
+
+            Argument:
+            txn --- database cursor
+
+            Note that the status of the record will be set to ERROR until
+            the job has been successfully added to the RabbitMQ transfer queue.
+            """
             try:
                 txn.execute("INSERT INTO jobs (job_id, product_id, status, "
                             "destination_path, stager_callback, "
@@ -117,6 +146,7 @@ class TransferSubmit (Resource):
         # Add to rabbitmq
         @inlineCallbacks
         def _add_to_rabbitmq(_):
+            """Add the job to RabbitMQ."""
             channel = yield self.pika_conn.channel()
             yield channel.queue_declare(queue=self.staging_queue,
                                         exclusive=False, durable=False)
@@ -124,9 +154,7 @@ class TransferSubmit (Resource):
                                         self.pika_send_properties)
 
         def _update_job_status(txn):
-            pass
-
-            # Update database record state to SUBMITTED
+            """Update status of the job in the DB to SUBMITTED."""
             try:
                 txn.execute("UPDATE jobs SET status = 'SUBMITTED' WHERE "
                             "job_id = %s", [job_uuid])
@@ -143,6 +171,7 @@ class TransferSubmit (Resource):
 
         # Report results
         def _report_job_creation(_):
+            """Report that the job submission was accepted with no errors."""
             result = {
               'msg': 'Job submission processed successfully',
               'error': False,
@@ -155,6 +184,7 @@ class TransferSubmit (Resource):
                           % job_uuid)
 
         def _handleCreationError(e):
+            """Report that an error occured when processing the job."""
             request.setResponseCode(500)
             if isinstance(SubmitException, e.value):
                 request.write(e.toJSON())
@@ -168,10 +198,10 @@ class TransferSubmit (Resource):
                 request.write(json.dumps(result) + "\n")
             request.finish()
 
+        # Add callbacks to handle the job submission asynchronously
         d = self.dbpool.runInteraction(_add_initial)
         d.addCallback(_add_to_rabbitmq)
         d.addCallback(lambda _: self.dbpool.runInteraction(_update_job_status))
         d.addCallback(_report_job_creation)
         d.addErrback(_handleCreationError)
-
         return NOT_DONE_YET

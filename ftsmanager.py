@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+"""Manage interaction with FTS service."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 # (scans FTS server at a regular interval, updating the status of tasks)
 @inlineCallbacks
 def _FTSUpdater():
+    """Contact FTS to update the status of jobs in the TRANSFERRING state."""
     global log
     global dbpool
     global server
@@ -105,6 +106,7 @@ def _FTSUpdater():
 
 @inlineCallbacks
 def _start_fts_transfer(job_id):
+    """Submit transfer request for job to FTS server and update DB."""
     global log
     global dbpool
     global server
@@ -166,6 +168,12 @@ def _start_fts_transfer(job_id):
 
 @inlineCallbacks
 def _transfer_queue_listener():
+    """Wait for requests to come in via transfer queue.
+
+    Note that only a bounded number of jobs are permitted
+    to be in the transferring state at any point in time and this is enforced
+    using a semaphore.
+    """
     global log
     global transfer_queue
     global conn
@@ -192,6 +200,30 @@ def _transfer_queue_listener():
 
 def init_fts_manager(l_conn, l_dbpool, fts_server, l_transfer_queue,
                      fts_concurrent_max, fts_polling_interval):
+    """Initialize services to manage transfers using FTS.
+
+    This involves:
+    * Initializing a thread to listen for requests to start
+      transfers on the transfer queue
+    * Scheduling a routine to run at a regular interval, querying the
+      FTS server to update the status of jobs in the TRANSFERRING state.
+
+    Note that this function also initializes a semaphore used to enforce a
+    limit on the maximum number of transfer tasks which are permitted to take
+    place in parallel.
+
+    Parameters:
+    l_conn -- Shared connection to RabbitMQ
+    l_dbpool -- Global shared database connection pool
+    fts_server -- URI of the FTS server
+    l_transfer_queue -- Name of the RabbitMQ queue to which to listen for
+      transfer requests
+    fts_concurrent_max -- Maximum number of jobs that are permitted to be
+      in the TRANSFERRING stage at any point in time
+    fts_polling_interval -- Interval in seconds between polling attempts of the
+      FTS server to update the status of jobs currently in the TRANSFERRING
+      state
+    """
     global log
     global conn
     global dbpool
