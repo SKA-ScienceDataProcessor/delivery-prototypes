@@ -139,10 +139,14 @@ def main():
 
         init_staging(conn, dbpool, staging_queue, staging_concurrent_max,
                      staging_url, staging_callback, transfer_queue)
-        fts_server = configData.get('fts', 'server')
         fts_concurrent_max = configData.get('fts', 'concurrent_max')
+        fts_params = [
+             configData.get('fts', 'server'), # URI of FTS service
+             configData.get('fts', 'cert'), # cert
+             configData.get('fts', 'key') # key
+        ]
         fts_interval = configData.get('fts', 'polling_interval')
-        init_fts_manager(conn, dbpool, fts_server, transfer_queue,
+        init_fts_manager(conn, dbpool, fts_params, transfer_queue,
                          fts_concurrent_max, fts_interval)
 
     parameters = pika.ConnectionParameters()

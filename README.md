@@ -135,7 +135,8 @@ with its INI-style formatting of the file.  It has the following fields:
 
 * `fts` section
   * `server`: URL of the FTS server endpoint
-  * `proxy`: Location of a valid X.509 proxy certificate to use
+  * `cert`: Path to an X.509 certificate to use
+  * `key`: Path to key for certificate
   * `concurrent_max`: The maximum number of concurrent transfer tasks allowed
   * `polling_interval`: The interval in seconds between instances in which the FTS
     server is polled.

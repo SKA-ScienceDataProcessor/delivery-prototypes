@@ -42,14 +42,14 @@ def _FTSUpdater():
     """Contact FTS to update the status of jobs in the TRANSFERRING state."""
     global log
     global dbpool
-    global server
+    global fts_params
     global sem_fts
 
     log.info("Running FTS updater")
 
     # Initialize FTS context
     try:
-        fts_context = fts3.Context(server)
+        fts_context = fts3.Context(*fts_params)
     except Exception, e:
         log.error('Exception creating FTS context in _FTSUpdater')
         log.error(str(e))
@@ -109,10 +109,10 @@ def _start_fts_transfer(job_id):
     """Submit transfer request for job to FTS server and update DB."""
     global log
     global dbpool
-    global server
+    global fts_params
 
     try:
-        fts_context = fts3.Context(server)
+        fts_context = fts3.Context(*fts_params)
     except Exception, e:
         log.error('Exception creating FTS context in _start_fts_transfer')
         log.error(str(e))
@@ -198,7 +198,7 @@ def _transfer_queue_listener():
     pass
 
 
-def init_fts_manager(l_conn, l_dbpool, fts_server, l_transfer_queue,
+def init_fts_manager(l_conn, l_dbpool, l_fts_params, l_transfer_queue,
                      fts_concurrent_max, fts_polling_interval):
     """Initialize services to manage transfers using FTS.
 
@@ -215,7 +215,8 @@ def init_fts_manager(l_conn, l_dbpool, fts_server, l_transfer_queue,
     Parameters:
     l_conn -- Shared connection to RabbitMQ
     l_dbpool -- Global shared database connection pool
-    fts_server -- URI of the FTS server
+    l_fts_params -- A list of parameters to initialize the FTS service
+        [URI of FTS server, path to certificate, path to key]
     l_transfer_queue -- Name of the RabbitMQ queue to which to listen for
       transfer requests
     fts_concurrent_max -- Maximum number of jobs that are permitted to be
@@ -227,7 +228,7 @@ def init_fts_manager(l_conn, l_dbpool, fts_server, l_transfer_queue,
     global log
     global conn
     global dbpool
-    global server
+    global fts_params
     global transfer_queue
     global sem_fts
 
@@ -235,7 +236,7 @@ def init_fts_manager(l_conn, l_dbpool, fts_server, l_transfer_queue,
 
     conn = l_conn
     dbpool = l_dbpool
-    server = fts_server
+    fts_params = l_fts_params
     transfer_queue = l_transfer_queue
     sem_fts = DeferredSemaphore(int(fts_concurrent_max))
 
