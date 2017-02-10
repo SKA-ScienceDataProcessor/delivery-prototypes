@@ -112,32 +112,36 @@ with its INI-style formatting of the file.  It has the following fields:
 
 * `ssl` section
 
-  * `cert`: SSL certificate file
-  * `key`: SSL key file
-  * `chain`: Certificate chain to ensure that the certificate will be trusted
+    * `cert`: SSL certificate file
+    * `key`: SSL key file
+    * `chain`: Certificate chain to ensure that the certificate will be trusted
 
 * `mysql` section
-  * `hostname`: Hostname of the database server
-  * `username` and `password`: Credentials to connect to the database server with
-  * `db`: Name of the database
+
+    * `hostname`: Hostname of the database server
+    * `username` and `password`: Credentials to connect to the database server with
+    * `db`: Name of the database
 
 * `ampq` section
-  * `hostname`: Hostname of the rabbitmq server
-  * `staging_queue`: Name of the queue in which staging requests are to be stored
-  * `transfer_queue`: Name of the queue in which transfer requests are to be stored
+
+    * `hostname`: Hostname of the rabbitmq server
+    * `staging_queue`: Name of the queue in which staging requests are to be stored
+    * `transfer_queue`: Name of the queue in which transfer requests are to be stored
 
 * `staging` section
-  * `concurrent_max`: The maximum number of concurrent staging jobs to allow
-  * `server`: URL of the staging server interface
-  * `callback`: URL to contact once the staging has been completed
+
+    * `concurrent_max`: The maximum number of concurrent staging jobs to allow
+    * `server`: URL of the staging server interface
+    * `callback`: URL to contact once the staging has been completed
 
 * `fts` section
-  * `server`: URL of the FTS server endpoint
-  * `cert`: Path to an X.509 certificate to use
-  * `key`: Path to key for certificate
-  * `concurrent_max`: The maximum number of concurrent transfer tasks allowed
-  * `polling_interval`: The interval in seconds between instances in which the FTS
-    server is polled.
+
+    * `server`: URL of the FTS server endpoint
+    * `cert`: Path to an X.509 certificate to use
+    * `key`: Path to key for certificate
+    * `concurrent_max`: The maximum number of concurrent transfer tasks allowed
+    * `polling_interval`: The interval in seconds between instances in which the FTS
+      server is polled.
 
 
 Database description
