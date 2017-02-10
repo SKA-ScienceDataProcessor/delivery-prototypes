@@ -27,6 +27,35 @@ sudo chmod 500 /etc/authbind/byport/{80,443}
 sudo chown `whoami` /etc/authbind/byport/{80,443}
 ```
 
+Launching the service
+===
+
+**Stager**
+The current stager service is more minimalistic than the version found in the `legacy`
+folder.  At present the service is hardcoded to accept as product IDs filenames in the
+`~/products` directory and performing the staging account will create a hard link to these
+in the `~/staging` directory.  *Note that as this is a minimalistic service intended to
+only be accessible on localhost, precautions have not been taken against using relative
+paths to access files in other directories.*
+
+```sh
+. ~/venv/bin/activate
+cd ~/transferprototype
+./dummy_stager.py
+```
+
+**Transfer tool**
+In order for this to work, a MySQL database needs to be setup and a table created as
+outlined later in this file. It is also necessary to update the configuration file
+to work in your installation, using the config file section later in in the document.
+To avoid mixing configuration and code, installs should specify their configuration in
+`~/.transfer.cfg` which will replace the default configuration when available.
+```sh
+. ~/venv/bin/activate
+cd ~/transferprototype
+./dummy_stager.py
+```
+
 Dirs
 ===
 * `legacy`: Contains code from an earlier incarnation that didn't use a DB backend
