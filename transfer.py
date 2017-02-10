@@ -49,38 +49,6 @@ from ftsmanager import init_fts_manager
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
-class PIKAReconnectingClientFactory(ReconnectingClientFactory):
-    """Factory to auto-reconnect to RabbitMQ when disconnected."""
-
-    def startedConnecting(self, conn):
-        """Call when initializing connection to RabbitMQ."""
-        global log
-        log.info('About to connect to rabbitmq')
-
-    @inlineCallbacks
-    def buildProtocol(self, addr):
-        """Used to build protocol object."""
-        global log
-        log.info('Connected')
-        self.resetDelay()
-        p = pika.ConnectionParameters()
-        tc = twisted_connection.TwistedProtocolConnection(p)
-        yield tc.ready
-        returnValue(tc)
-
-    def clientConnectionLost(self, conn, reason):
-        """Called when the connection to RabbitMQ was lost."""
-        global log
-        log.info('Lost connection to rabbitmq: ' + str(reason))
-        ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
-
-    def clientConnectionFailed(self, conn, reason):
-        """Called when connection attemp to RabbitMQ was unsuccessful."""
-        global log
-        log.info('Unable to connect to rabbitmq: ' + str(reason))
-        ReconnectingClientFactory.clientConnectionLost(self, conn, reason)
-
-
 def main():
     """Main function for transfer service prototype.
 
