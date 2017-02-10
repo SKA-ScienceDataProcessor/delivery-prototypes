@@ -231,6 +231,15 @@ log.startLogging(sys.stdout)
 Example commands
 ===
 
-* Submit a job: `curl http://localhost:8080/submitTransfer -d product_id=005 -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu`
+* Submit a job:
+```sh
+# Get product ID 005
+curl http://localhost:8080/submitTransfer -d product_id=005 \
+  -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu`
+```
 
-* Get transfer status: `curl http://localhost:8080/transferStatus?job_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2`
+* Get transfer status:
+```sh
+# Get status of job b8b14f92-e6f3-11e6-8265-fa163e434fb2
+curl http://localhost:8080/transferStatus?job_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2
+```
