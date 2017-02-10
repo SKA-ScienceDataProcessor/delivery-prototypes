@@ -30,9 +30,7 @@ sudo chown `whoami` /etc/authbind/byport/{80,443}
 Dirs
 ===
 * `legacy`: Contains code from an earlier incarnation that didn't use a DB backend
-* `throwaway`: Contains code not meant to be part of the final product
-* `throwaway/fail`: Code from abandoned approaches
-* `throwaway/working`: Small scale test programs to verify how to implement a particular bit of code in an approved fashion
+* `throwaway`: Contains code not meant to be part of the final product.  Used for prototyping new additions to the codebase.
 
 REST API description
 ===
@@ -188,14 +186,8 @@ TODO
 * Make sure that the error timestamp is being set when the job status is being changed
   to ERROR.  May want to do this at the DB level (for the other timestamps as well)
 
-* Update variable and function names in files to reflect their level of privateness
-
 * Maybe update the name of the detailed_status field to extra_status given that it's not
   really used frequently.
-  
-* Ensure the user credentials are handled better.  For now dependent on environment
-  variables and the credentials are not assumed to expire.  This should **not** be run
-  in a production environment.
 
 * Better handling of missing values in config file
 
@@ -203,6 +195,9 @@ TODO
 
 Known issues
 ===
+
+* The semaphore's state is not saved when exiting the program, and thus errors may
+  occur.
 
 * the application doesn't automatically reconnect to rabbit mq in the event that the
   connection to the server is broken.  
@@ -223,9 +218,8 @@ Known issues
 Notes
 ===
 
-If you get an Unhandled Error in Deferred where there's no errback for the Deferred,
-then you can add the following code to the file involved to ensure that the Exception
-will be reported:
+Remember to add the following code to the file involved to ensure that Exceptions
+in Deferreds will be reported:
 
 ```python
 import sys
