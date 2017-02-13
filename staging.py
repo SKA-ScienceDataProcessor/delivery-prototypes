@@ -57,61 +57,67 @@ def finish_staging(job_id, product_id, authcode, stager_success, staged_to,
     Return value:
     A boolean indicating whether or not an error was successfully processed.
     """
-    global transfer_queue
-    global conn
-    global sem_staging
+    global _dbpool
+    global _transfer_queue
+    global _pika_conn
+    global _sem_staging
 
     # Report stager failure is something other than success was reported
     if not stager_success:
-        log.error('The stager reported failure')
+        _log.error('The stager reported failure staging job %s' % job_id)
+        yield _sem_staging.release()
+        returnValue(False)
 
     # Verify authcode against value returned from DB
     try:
-        r = yield dbpool.runQuery("SELECT stager_callback FROM jobs WHERE "
-                                  "job_id = %s", [job_id])
+        r = yield _dbpool.runQuery("SELECT stager_callback FROM jobs WHERE "
+                                   "job_id = %s", [job_id])
         if r[0][0] != authcode:
             raise Exception('Invalid authcode %s for job %s' % authcode,
                             job_id)
     except Exception, e:
-        yield log.error(str(e))
-        yield sem_staging.release()
+        yield _log.error(str(e))
+        yield _sem_staging.release()
         returnValue(False)
 
     # Update database information
     try:
-        r = yield dbpool.runQuery("UPDATE jobs SET "
-                                  "status = 'DONESTAGING', "
-                                  "time_staging_finished = now(), "
-                                  "stager_path = %s, "
-                                  "stager_hostname = %s, "
-                                  "stager_status = %s "
-                                  "WHERE job_id = %s",
-                                  [path, staged_to, msg, job_id])
+        r = yield _dbpool.runQuery("UPDATE jobs SET "
+                                   "status = 'DONESTAGING', "
+                                   "time_staging_finished = now(), "
+                                   "stager_path = %s, "
+                                   "stager_hostname = %s, "
+                                   "stager_status = %s "
+                                   "WHERE job_id = %s",
+                                   [path, staged_to, msg, job_id])
     except Exception, e:
-        yield log.error('Error updating DB to report staging finished for '
-                        'job %s' % job_id)
-        yield log.error(str(e))
-        yield sem_staging.release()
+        yield _log.error('Error updating DB to report staging finished for '
+                         'job %s' % job_id)
+        yield _log.error(str(e))
+        yield _sem_staging.release()
         returnValue(False)
 
     # Add to transfer queue
     try:
         pika_send_properties = pika.BasicProperties(content_type='text/plain',
                                                     delivery_mode=1)
-        channel = yield conn.channel()
-        yield channel.queue_declare(queue=transfer_queue, exclusive=False,
+        channel = yield _pika_conn.channel()
+        yield channel.queue_declare(queue=_transfer_queue, exclusive=False,
                                     durable=True)
-        yield channel.basic_publish('', transfer_queue, job_id,
+        yield channel.basic_publish('', _transfer_queue, job_id,
                                     pika_send_properties)
     except Exception, e:
-        yield log.error('Error add job %s to rabbitmq transfer queue' % job_id)
-        yield log.error(str(e))
-        yield sem_staging.release()
+        yield _log.error('Error adding job %s to rabbitmq transfer queue'
+                         % job_id)
+        yield _log.error(str(e))
+        yield _sem_staging.release()
         returnValue(False)
+    finally:
+        yield channel.close()
 
     # Allow next job into staging and report results
-    yield sem_staging.release()
-    yield log.info("Completed staging of %s" % job_id)
+    yield _log.info("Completed staging of %s" % job_id)
+    yield _sem_staging.release()
     returnValue(True)
 
 
@@ -125,45 +131,45 @@ def _send_to_staging(job_id, token_len=32):
       token passed to the stager for it to verify its identity when
       reporting the completion of the staging process.
     """
-    global log
-    global dbpool
-    global sem_staging
-    global stager_url
-    global stager_callback
+    global _log
+    global _dbpool
+    global _sem_staging
+    global _stager_uri
+    global _stager_callback
 
     # Get job details from DB and create authcode for callback
     try:
-        r = yield dbpool.runQuery("SELECT product_id FROM jobs WHERE "
-                                  "job_id = %s", [job_id])
+        r = yield _dbpool.runQuery("SELECT product_id FROM jobs WHERE "
+                                   "job_id = %s", [job_id])
         product_id = r[0][0]
     except Exception, e:
-        yield log.error('Error retrieving product ID for job ID %s' % job_id)
-        yield log.error(e)
+        yield _log.error('Error retrieving product ID for job ID %s' % job_id)
+        yield _log.error(e)
         try:
-            dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
-                            "detailed_status = 'Error retrieving product ID "
-                            "when preparing to stage job' WHERE "
-                            "job_id = %s", [job_id])
+            _dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
+                             "detailed_status = 'Error retrieving product ID "
+                             "when preparing to stage job' WHERE "
+                             "job_id = %s", [job_id])
         except Exception:
-            # Just log this one as it might have been a broken DB that
+            # Just _log this one as it might have been a broken DB that
             # triggered the original error.
-            log.error('Error updating DB with staging error for job %s'
-                      % job_id)
+            _log.error('Error updating DB with staging error for job %s'
+                       % job_id)
         # Abort the staging request as it's impossible without a product ID
-        yield sem_staging.release()
+        yield _sem_staging.release()
         returnValue(None)
     authcode = ''.join(random.choice(lowercase) for i in range(token_len))
 
     # Update job status to staging and add callback code
     try:
-        yield dbpool.runQuery("UPDATE jobs SET status = 'STAGING', "
-                              "time_staging = now(), "
-                              "stager_callback = %s WHERE job_id = %s",
-                              (authcode, job_id))
+        yield _dbpool.runQuery("UPDATE jobs SET status = 'STAGING', "
+                               "time_staging = now(), "
+                               "stager_callback = %s WHERE job_id = %s",
+                               (authcode, job_id))
     except Exception:
-        yield log.error('Error updating job status / recording stager '
-                        'callback code for job %s' % job_id)
-        yield sem_staging.release()
+        yield _log.error('Error updating job status / recording stager '
+                         'callback code for job %s' % job_id)
+        yield _sem_staging.release()
         returnValue(None)
 
     # Contact the stager to initiate the transfer process
@@ -171,23 +177,23 @@ def _send_to_staging(job_id, token_len=32):
       'job_id': job_id,
       'product_id': product_id,
       'authcode': authcode,
-      'callback': stager_callback,
+      'callback': _stager_callback,
     }
     try:
-        r = yield treq.get(stager_url, params=params)
+        r = yield treq.get(_stager_uri, params=params)
         if int(r.code) >= 400:
             raise Exception('The stager reported an error - status was %s'
                             % r.code)
     except Exception, e:
-        log.error('Error contacting stager at %s to submit request to stage '
-                  'product ID %s for job ID %s'
-                  % (stager_callback, product_id, job_id))
-        log.error(e)
-        yield dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
-                              "detailed_status = 'Error contacting stager' "
-                              "WHERE job_id = %s", [job_id])
+        _log.error('Error contacting stager at %s to submit request to stage '
+                   'product ID %s for job ID %s'
+                   % (_stager_callback, product_id, job_id))
+        _log.error(e)
+        yield _dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
+                               "detailed_status = 'Error contacting stager' "
+                               "WHERE job_id = %s", [job_id])
 
-    yield log.info('Finished submitting job %s to stager' % job_id)
+    yield _log.info('Finished submitting job %s to stager' % job_id)
 
 
 @inlineCallbacks
@@ -198,31 +204,31 @@ def _staging_queue_listener():
     as setup here. Note that a semaphore is used to ensure that only a fixed
     number of jobs can be in staging process at one time.
     """
-    global log
-    global conn
-    global staging_queue
-    global sem_staging
+    global _log
+    global _pika_conn
+    global _staging_queue
+    global _sem_staging
 
-    channel = yield conn.channel()
-    queue = yield channel.queue_declare(queue=staging_queue,
+    channel = yield _pika_conn.channel()
+    queue = yield channel.queue_declare(queue=_staging_queue,
                                         exclusive=False,
                                         durable=True)
     yield channel.basic_qos(prefetch_count=1)
 
-    # Enter loop
-    queue, _ = yield channel.basic_consume(queue=staging_queue,
+    queue, _ = yield channel.basic_consume(queue=_staging_queue,
                                            no_ack=False)
+
     while True:
-        yield sem_staging.acquire()
         ch, method, properties, body = yield queue.get()
         if body:
-            reactor.callInThread(_send_to_staging, [body])
+            yield _sem_staging.acquire()
+            reactor.callFromThread(_send_to_staging, body)
             yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 @inlineCallbacks
-def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
-                 s_callback, l_transfer_queue):
+def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
+                 stager_callback, transfer_queue):
     """Initialize thread to manage the staging process.
 
     Note that this function also initializes a semaphore used to enforce a
@@ -230,39 +236,37 @@ def init_staging(l_conn, l_dbpool, l_staging_queue, max_concurrent, s_url,
     done in parallel.
 
     Parameters:
-    l_conn -- Globally shared RabbitMQ connection
+    pika_conn -- Globally shared RabbitMQ connection
     l_dbpool -- Globally shared database connection pool
-    l_staging_queue -- Name of RabbitMQ queue to which staging requests are
+    staging_queue -- Name of RabbitMQ queue to which staging requests are
       beging sent.
     max_concurrent -- Maximum number of jobs permitted to be in the STAGING
       state at any point in time
-    s_url -- URI of the stager
-    s_callback -- Callback which the stager should contact once staging has
-      been completed.
-    l_transfer_queue -- Name of the RabbitMQ queue to which transfer requests
+    stager_uri -- URI of the stager
+    stager_callback -- Callback for stager to contact once staging complete
+    transfer_queue -- Name of the RabbitMQ queue to which transfer requests
       should be sent.
     """
-    global log
-    global conn
-    global dbpool
-    global sem_staging
-    global staging_queue
-    global stager_url
-    global stager_callback
-    global transfer_queue
+    global _dbpool
+    global _log
+    global _pika_conn
+    global _sem_staging
+    global _staging_queue
+    global _stager_uri
+    global _stager_callback
+    global _transfer_queue
 
-    log = Logger()
-    twisted.python.log.startLogging(stderr)
+    _log = Logger()
 
-    yield log.info("Initializing staging (max %s concurrent)"
-                   % max_concurrent)
+    yield _log.info("Initializing staging (max %s concurrent)"
+                    % max_concurrent)
 
-    conn = l_conn
-    dbpool = l_dbpool
-    sem_staging = DeferredSemaphore(int(max_concurrent))
-    staging_queue = l_staging_queue
-    stager_url = s_url
-    stager_callback = s_callback
-    transfer_queue = l_transfer_queue
+    _pika_conn = pika_conn
+    _dbpool = dbpool
+    _sem_staging = DeferredSemaphore(int(max_concurrent))
+    _staging_queue = staging_queue
+    _stager_uri = stager_uri
+    _stager_callback = stager_callback
+    _transfer_queue = transfer_queue
 
-    reactor.callInThread(_staging_queue_listener)
+    reactor.callFromThread(_staging_queue_listener)

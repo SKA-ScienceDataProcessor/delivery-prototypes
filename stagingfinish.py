@@ -18,8 +18,7 @@
 from __future__ import print_function  # for python 2
 
 from staging import finish_staging
-from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
-                                   returnValue
+from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.logger import Logger
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET

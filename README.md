@@ -151,9 +151,9 @@ with its INI-style formatting of the file.  It has the following fields:
     * `username` and `password`: Credentials to connect to the database server with
     * `db`: Name of the database
 
-* `ampq` section
+* `amqp` section
 
-    * `hostname`: Hostname of the rabbitmq server
+    * `uri`: URI to use to connect to the = amqp://localhost
     * `staging_queue`: Name of the queue in which staging requests are to be stored
     * `transfer_queue`: Name of the queue in which transfer requests are to be stored
 
@@ -205,6 +205,8 @@ PRIMARY KEY (job_id));
 TODO
 ===
 
+* Update fts_manager to use the FTS pool.
+
 * Rewrite start to launch using twistd rather than the current config script.
 
 * Support timeouts in case of stager failure
@@ -217,7 +219,7 @@ TODO
   as well.
 
 * Make sure that the error timestamp is being set when the job status is being changed
-  to ERROR.  May want to do this at the DB level (for the other timestamps as well)
+  to ERROR.  May want to do this at the DB level (for the other self._dbpooltimestamps as well)
 
 * Maybe update the name of the detailed_status field to extra_status given that it's not
   really used frequently.
@@ -247,19 +249,6 @@ Known issues
   would likely need to be added to the queues.
 
 * FTS transfers currently use default settings
-
-Notes
-===
-
-Remember to add the following code to the file involved to ensure that Exceptions
-in Deferreds will be reported:
-
-```python
-import sys
-from twisted.python import log
-
-log.startLogging(sys.stdout)
-```
 
 Example commands
 ===

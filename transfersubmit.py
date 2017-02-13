@@ -59,25 +59,25 @@ class TransferSubmit (Resource):
 
     isLeaf = True
 
-    def __init__(self, dbpool, staging_queue, conn):
+    def __init__(self, dbpool, staging_queue, pika_conn):
         """Initialize transfer submission REST interface.
 
         Arguments:
         dbpool -- shared database connection pool
         staging_queue -- named of the RabbitMQ queue to submit transfers to
-        conn -- shared connection to RabbitMQ
+        pika_conn -- shared connection to RabbitMQ
         """
         Resource.__init__(self)
 
         # Use global logger and database pool
-        self.log = Logger()
-        self.dbpool = dbpool
+        self._log = Logger()
+        self._dbpool = dbpool
 
         # Setup local connection to rabbitmq
-        self.staging_queue = staging_queue
-        self.pika_conn = conn
-        bp = pika.BasicProperties(content_type='text/plain', delivery_mode=1)
-        self.pika_send_properties = bp
+        self._staging_queue = staging_queue
+        self._pika_conn = pika_conn
+        self._pika_bp = pika.BasicProperties(content_type='text/plain',
+                                             delivery_mode=1)
 
     def render_POST(self, request):
         """Manage POST request with job submission.
@@ -106,7 +106,7 @@ class TransferSubmit (Resource):
             destination_path = up.geturl()
         except Exception, e:
             if not isinstance(e, SubmitException):
-                self.log.error(e)
+                self._log.error(e)
             request.setResponseCode(400)
             result = {
               'msg': 'destination_path must be a URL specifying '
@@ -138,7 +138,7 @@ class TransferSubmit (Resource):
                             "%s, now())",
                             [job_uuid, product_id, destination_path, callback])
             except Exception, e:
-                self.log.error(e)
+                self._log.error(e)
                 request.setResponseCode(500)
                 raise SubmitException('Error creating database record',
                                       job_uuid)
@@ -147,19 +147,19 @@ class TransferSubmit (Resource):
         @inlineCallbacks
         def _add_to_rabbitmq(_):
             """Add the job to RabbitMQ."""
-            channel = yield self.pika_conn.channel()
-            yield channel.queue_declare(queue=self.staging_queue,
+            channel = yield self._pika_conn.channel()
+            yield channel.queue_declare(queue=self._staging_queue,
                                         exclusive=False, durable=True)
-            yield channel.basic_publish('', self.staging_queue, job_uuid,
-                                        self.pika_send_properties)
+            yield channel.basic_publish('', self._staging_queue, job_uuid,
+                                        self._pika_bp)
 
-        def _update_job_status(txn):
+        def _update_status(txn):
             """Update status of the job in the DB to SUBMITTED."""
             try:
                 txn.execute("UPDATE jobs SET status = 'SUBMITTED' WHERE "
                             "job_id = %s", [job_uuid])
             except Exception, e:
-                self.log.error(e)
+                self._log.error(e)
                 request.setResponseCode(500)
                 msg = 'Error updating job status to STAGING'
                 result = {
@@ -180,16 +180,16 @@ class TransferSubmit (Resource):
             request.setResponseCode(202)
             request.write(json.dumps(result) + "\n")
             request.finish()
-            self.log.info("Job submission of %s processed successfully"
-                          % job_uuid)
+            self._log.info("Job submission of %s processed successfully"
+                           % job_uuid)
 
         def _handleCreationError(e):
             """Report that an error occured when processing the job."""
             request.setResponseCode(500)
-            if isinstance(SubmitException, e.value):
+            if isinstance(e, SubmitException):
                 request.write(e.toJSON())
             else:
-                self.log.error(e)
+                self._log.error(e)
                 result = {
                   'msg': 'Unknown error handling job submission',
                   'job_id': job_uuid,
@@ -199,9 +199,9 @@ class TransferSubmit (Resource):
             request.finish()
 
         # Add callbacks to handle the job submission asynchronously
-        d = self.dbpool.runInteraction(_add_initial)
+        d = self._dbpool.runInteraction(_add_initial)
         d.addCallback(_add_to_rabbitmq)
-        d.addCallback(lambda _: self.dbpool.runInteraction(_update_job_status))
+        d.addCallback(lambda _: self._dbpool.runInteraction(_update_status))
         d.addCallback(_report_job_creation)
         d.addErrback(_handleCreationError)
         return NOT_DONE_YET

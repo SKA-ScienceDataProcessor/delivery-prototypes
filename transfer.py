@@ -18,19 +18,21 @@
 from __future__ import print_function  # for python 2
 
 import ConfigParser
-import pika
+import logging
 import sys
 import time
+import twisted
 
 from OpenSSL import crypto, SSL
 from os.path import dirname, exists, expanduser, join, realpath
-from pika.adapters import twisted_connection
+from pika import ConnectionParameters
+from pika.adapters.twisted_connection import TwistedProtocolConnection
+
 from time import localtime, strftime
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
-from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
-                                   returnValue
-from twisted.internet.protocol import Protocol, ReconnectingClientFactory
+from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.internet.protocol import ClientCreator
 from twisted.logger import FileLogObserver, formatEvent, \
                            globalLogPublisher, Logger
 from twisted.web.resource import Resource
@@ -59,14 +61,12 @@ def main():
     * listens on the desired port
     * ... and finally, starts reactor
     """
-    global dbpool
-    global log
-    global configData
-
     log = Logger()
     observer = FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
     globalLogPublisher.addObserver(observer)
     log.info("Initialized logging")
+    twisted.python.log.startLogging(sys.stdout)
+    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
     # Load settings
     cfg_file = expanduser('~/.transfer.cfg')
@@ -84,49 +84,46 @@ def main():
                                    db=configData.get('mysql', 'db'))
     log.info("DB Connection Established")
 
-    # Launch server
+    # Retrieve values needed for rabbit mq connections
+    staging_queue = configData.get('amqp', 'staging_queue')
+    transfer_queue = configData.get('amqp', 'transfer_queue')
+    pika_hostname = configData.get('amqp', 'hostname')
+
+    # Create root webpage
     root = RootPage()
     root.putChild('', root)
 
-    # Retrieve values needed for rabbit mq connections
-    host = configData.get('ampq', 'hostname')
-    staging_queue = configData.get('ampq', 'staging_queue')
-    transfer_queue = configData.get('ampq', 'transfer_queue')
-
-    # Setup connection and initialize web interface & fts + staging managers
-    def setup_nodes(conn):
-        # Setup web interface portions
-        t_submit = TransferSubmit(dbpool, staging_queue, conn)
+    def _setupApp(pika_conn):
+        # Add child web pages
+        t_submit = TransferSubmit(dbpool, staging_queue, pika_conn)
         root.putChild('submitTransfer', t_submit)
         root.putChild('transferStatus', TransferStatus(dbpool))
         root.putChild('doneStaging', StagingFinish(dbpool))
 
+        # Setup staging manager
         staging_concurrent_max = configData.get('staging', 'concurrent_max')
         staging_url = configData.get('staging', 'server')
         staging_callback = configData.get('staging', 'callback')
-
-        init_staging(conn, dbpool, staging_queue, staging_concurrent_max,
+        init_staging(pika_conn, dbpool, staging_queue, staging_concurrent_max,
                      staging_url, staging_callback, transfer_queue)
+
+        # Setup FTS manager
         fts_concurrent_max = configData.get('fts', 'concurrent_max')
         fts_params = [
-             configData.get('fts', 'server'), # URI of FTS service
-             configData.get('fts', 'cert'), # cert
-             configData.get('fts', 'key') # key
-        ]
+                      configData.get('fts', 'server'),  # URI of FTS service
+                      configData.get('fts', 'cert'),  # cert
+                      configData.get('fts', 'key')  # key
+                     ]
         fts_interval = configData.get('fts', 'polling_interval')
-        init_fts_manager(conn, dbpool, fts_params, transfer_queue,
+        init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
                          fts_concurrent_max, fts_interval)
 
-    parameters = pika.ConnectionParameters()
-    cc = protocol.ClientCreator(reactor,
-                                twisted_connection.TwistedProtocolConnection,
-                                parameters)
-    d = cc.connectTCP(host, 5672)
+    # Setup pika connection
+    pika_cc = ClientCreator(reactor, TwistedProtocolConnection,
+                            ConnectionParameters())
+    d = pika_cc.connectTCP(pika_hostname, 5672)
     d.addCallback(lambda protocol: protocol.ready)
-    d.addCallback(setup_nodes)
-    # prcf = PIKAReconnectingClientFactory()
-    # conn = reactor.connectTCP(host, 5672, prcf)
-    # setup_nodes(conn)
+    d.addCallback(_setupApp)
 
     # Setup HTTP
     factory = Site(root)

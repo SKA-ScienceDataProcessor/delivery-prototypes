@@ -40,38 +40,38 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 @inlineCallbacks
 def _FTSUpdater():
     """Contact FTS to update the status of jobs in the TRANSFERRING state."""
-    global log
-    global dbpool
-    global fts_params
-    global sem_fts
+    global _log
+    global _dbpool
+    global _fts_params
+    global _sem_fts
 
-    log.info("Running FTS updater")
+    _log.info("Running FTS updater")
 
     # Initialize FTS context
     try:
-        fts_context = fts3.Context(*fts_params)
+        fts_context = fts3.Context(*_fts_params)
     except Exception, e:
-        log.error('Exception creating FTS context in _FTSUpdater')
-        log.error(str(e))
+        _log.error('Exception creating FTS context in _FTSUpdater')
+        _log.error(str(e))
         returnValue(None)
 
     # Retrieve list of jobs currently submitted to FTS from DB
     try:
-        r = yield dbpool.runQuery("SELECT job_id, fts_jobid FROM jobs WHERE "
-                                  "status='TRANSFERRING'")
+        r = yield _dbpool.runQuery("SELECT job_id, fts_jobid FROM jobs WHERE "
+                                   "status='TRANSFERRING'")
     except Exception, e:
-        log.error('Error retrieving list of in transferring stage from DB')
-        log.error(str(e))
+        _log.error('Error retrieving list of in transferring stage from DB')
+        _log.error(str(e))
         returnValue(None)
 
     if r is None:
-        log.info('FTS Updater found no jobs in the transferring state')
+        _log.info('FTS Updater found no jobs in the transferring state')
         returnValue(None)
 
     # for each job get FTS status
     try:
         for job in r:
-            yield log.debug(job)
+            yield _log.debug('job_id: %s | fts_id: %s' % (job[0], job[1]))
             job_id = job[0]
             fts_jobid = job[1]
             fts_job_status = fts3.get_job_status(fts_context, fts_jobid)
@@ -80,90 +80,90 @@ def _FTSUpdater():
             state = fts_job_status['job_state']
 
             if state == 'FINISHED':
-                log.info('Job %s successfully completed using FTS' % job_id)
-                yield dbpool.runQuery("UPDATE jobs SET status = 'SUCCESS', "
-                                      "fts_details = %s WHERE job_id = %s",
-                                      [str(fts_job_status), job_id])
-                yield sem_fts.release()
+                _log.info('Job %s successfully completed using FTS' % job_id)
+                yield _dbpool.runQuery("UPDATE jobs SET status = 'SUCCESS', "
+                                       "fts_details = %s WHERE job_id = %s",
+                                       [str(fts_job_status), job_id])
+                yield _sem_fts.release()
             elif state == 'FAILED':
-                log.info('Job %s has failed during the transfer stage'
-                         % job_id)
-                yield dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
-                                      "fts_details = %s WHERE job_id = %s",
-                                      [str(fts_job_status), job_id])
-                yield sem_fts.release()
+                _log.info('Job %s has failed during the transfer stage'
+                          % job_id)
+                yield _dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
+                                       "fts_details = %s WHERE job_id = %s",
+                                       [str(fts_job_status), job_id])
+                yield _sem_fts.release()
             else:
-                yield dbpool.runQuery("UPDATE jobs SET fts_details = %s "
-                                      "WHERE job_id = %s",
-                                      [str(fts_job_status), job_id])
+                yield _dbpool.runQuery("UPDATE jobs SET fts_details = %s "
+                                       "WHERE job_id = %s",
+                                       [str(fts_job_status), job_id])
     except Exception, e:
-        log.error('Error updating status for jobs in FTS manager')
-        log.error(str(e))
+        _log.error('Error updating status for jobs in FTS manager')
+        _log.error(str(e))
         returnValue(None)
-    log.info('FTS Updater finished updating jobs that were in transferring '
-             'state')
+    _log.info('FTS Updater finished updating jobs that were in transferring '
+              'state')
 
 
 @inlineCallbacks
 def _start_fts_transfer(job_id):
     """Submit transfer request for job to FTS server and update DB."""
-    global log
-    global dbpool
-    global fts_params
+    global _log
+    global _dbpool
+    global _fts_params
 
     try:
-        fts_context = fts3.Context(*fts_params)
+        fts_context = fts3.Context(*_fts_params)
     except Exception, e:
-        log.error('Exception creating FTS context in _start_fts_transfer')
-        log.error(str(e))
+        _log.error('Exception creating FTS context in _start_fts_transfer')
+        _log.error(str(e))
         ds = "Failed to create FTS context when setting up transfer"
-        dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = %s"
-                        " WHERE job_id = %s", [ds, job_id])
+        _dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = %s"
+                         " WHERE job_id = %s", [ds, job_id])
         returnValue(None)
 
     # Get information about the transfer from the database
-    r = yield dbpool.runQuery("SELECT stager_path, stager_hostname, "
-                              "destination_path FROM jobs WHERE job_id = %s",
-                              [job_id])
+    r = yield _dbpool.runQuery("SELECT stager_path, stager_hostname, "
+                               "destination_path FROM jobs WHERE job_id = %s",
+                               [job_id])
     if r is None:
-        log.error('Invalid job_id %s received by FTS transfer service'
-                  % job_id)
+        _log.error('Invalid job_id %s received by FTS transfer service'
+                   % job_id)
         returnValue(None)
 
     # Create the transfer request
     src = 'gsiftp://%s%s' % (r[0][1], str(r[0][0]).rstrip(os.sep))
     dst = '%s/%s' % (str(r[0][2]).rstrip('/'), basename(r[0][0]))
-    log.info("About to transfer '%s' to '%s' for job %s" %
-             (src, dst, job_id))
+    _log.info("About to transfer '%s' to '%s' for job %s" %
+              (src, dst, job_id))
     try:
         transfer = fts3.new_transfer(src, dst)
         fts_job = fts3.new_job([transfer])
         fts_jobid = fts3.submit(fts_context, fts_job)
         fts_job_status = fts3.get_job_status(fts_context, fts_jobid)
     except Exception, e:
-        log.error('Error submitting job %s to FTS' % job_id)
-        log.error(str(e))
+        _log.error('Error submitting job %s to FTS' % job_id)
+        _log.error(str(e))
         ds = "Error submitting job to FTS"
-        dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = "
-                        "%s WHERE job_id = %s", [ds, job_id])
+        _dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = "
+                         "%s WHERE job_id = %s", [ds, job_id])
         returnValue(None)
 
     # Update job status, add FTS job ID & FTS status
     try:
-        yield dbpool.runQuery("UPDATE jobs SET status='TRANSFERRING', "
-                              "fts_jobid = %s, "
-                              "fts_details = %s WHERE job_id = %s",
-                              [fts_jobid, str(fts_job_status), job_id])
+        yield _dbpool.runQuery("UPDATE jobs SET status='TRANSFERRING', "
+                               "fts_jobid = %s, "
+                               "fts_details = %s WHERE job_id = %s",
+                               [fts_jobid, str(fts_job_status), job_id])
     except Exception, e:
-        log.error('Error updating status for job %s' % job_id)
-        log.error(str(e))
+        _log.error('Error updating status for job %s' % job_id)
+        _log.error(str(e))
         ds = "Error updating job status following FTS submission"
-        dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status "
-                        "= %s WHERE job_id = %s", [ds, job_id])
+        _dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status "
+                         "= %s WHERE job_id = %s", [ds, job_id])
 
         returnValue(None)
-    log.info('Job database updated; add FTS ID %s for job %s'
-             % (fts_jobid, job_id))
+    _log.info('Job database updated; add FTS ID %s for job %s'
+              % (fts_jobid, job_id))
 
 
 @inlineCallbacks
@@ -174,32 +174,32 @@ def _transfer_queue_listener():
     to be in the transferring state at any point in time and this is enforced
     using a semaphore.
     """
-    global log
-    global transfer_queue
-    global conn
-    global sem_fts
+    global _log
+    global _transfer_queue
+    global _pika_conn
+    global _sem_fts
 
-    channel = yield conn.channel()
-    queue = yield channel.queue_declare(queue=transfer_queue,
+    channel = yield _pika_conn.channel()
+
+    queue = yield channel.queue_declare(queue=_transfer_queue,
                                         exclusive=False,
                                         durable=True)
     yield channel.basic_qos(prefetch_count=1)
 
     # Enter loop
-    queue, consumer_tag = yield channel.basic_consume(queue=transfer_queue,
+    queue, consumer_tag = yield channel.basic_consume(queue=_transfer_queue,
                                                       no_ack=False)
+
     while True:
-        yield sem_fts.acquire()
         ch, method, properties, body = yield queue.get()
         if body:
-            reactor.callInThread(_start_fts_transfer, body)
+            yield _sem_fts.acquire()
+            reactor.callFromThread(_start_fts_transfer, body)
             yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    pass
 
-
-def init_fts_manager(l_conn, l_dbpool, l_fts_params, l_transfer_queue,
-                     fts_concurrent_max, fts_polling_interval):
+def init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
+                     concurrent_max, polling_interval):
     """Initialize services to manage transfers using FTS.
 
     This involves:
@@ -213,36 +213,36 @@ def init_fts_manager(l_conn, l_dbpool, l_fts_params, l_transfer_queue,
     place in parallel.
 
     Parameters:
-    l_conn -- Shared connection to RabbitMQ
-    l_dbpool -- Global shared database connection pool
-    l_fts_params -- A list of parameters to initialize the FTS service
+    pika_conn -- Global shared connection for RabbitMQ
+    dbpool -- Global shared database connection pool
+    fts_params -- A list of parameters to initialize the FTS service
         [URI of FTS server, path to certificate, path to key]
-    l_transfer_queue -- Name of the RabbitMQ queue to which to listen for
+    transfer_queue -- Name of the RabbitMQ queue to which to listen for
       transfer requests
-    fts_concurrent_max -- Maximum number of jobs that are permitted to be
+    concurrent_max -- Maximum number of jobs that are permitted to be
       in the TRANSFERRING stage at any point in time
-    fts_polling_interval -- Interval in seconds between polling attempts of the
+    polling_interval -- Interval in seconds between polling attempts of the
       FTS server to update the status of jobs currently in the TRANSFERRING
       state
     """
-    global log
-    global conn
-    global dbpool
-    global fts_params
-    global transfer_queue
-    global sem_fts
+    global _log
+    global _dbpool
+    global _fts_params
+    global _pika_conn
+    global _transfer_queue
+    global _sem_fts
 
-    log = Logger()
+    _log = Logger()
 
-    conn = l_conn
-    dbpool = l_dbpool
-    fts_params = l_fts_params
-    transfer_queue = l_transfer_queue
-    sem_fts = DeferredSemaphore(int(fts_concurrent_max))
+    _pika_conn = pika_conn
+    _dbpool = dbpool
+    _fts_params = fts_params
+    _transfer_queue = transfer_queue
+    _sem_fts = DeferredSemaphore(int(concurrent_max))
 
     # Start queue listener
-    reactor.callInThread(_transfer_queue_listener)
+    reactor.callFromThread(_transfer_queue_listener)
 
     # Run a task at a regular interval to update the status of submitted jobs
     fts_updater_runner = LoopingCall(_FTSUpdater)
-    fts_updater_runner.start(int(fts_polling_interval))
+    fts_updater_runner.start(int(polling_interval))
