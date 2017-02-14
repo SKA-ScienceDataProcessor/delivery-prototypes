@@ -147,7 +147,7 @@ def _send_to_staging(job_id, token_len=32):
         yield _log.error(e)
         try:
             _dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
-                             "detailed_status = 'Error retrieving product ID "
+                             "extra_status = 'Error retrieving product ID "
                              "when preparing to stage job' WHERE "
                              "job_id = %s", [job_id])
         except Exception:
@@ -190,7 +190,7 @@ def _send_to_staging(job_id, token_len=32):
                    % (_stager_callback, product_id, job_id))
         _log.error(e)
         yield _dbpool.runQuery("UPDATE jobs SET status = 'ERROR', "
-                               "detailed_status = 'Error contacting stager' "
+                               "extra_status = 'Error contacting stager' "
                                "WHERE job_id = %s", [job_id])
 
     yield _log.info('Finished submitting job %s to stager' % job_id)

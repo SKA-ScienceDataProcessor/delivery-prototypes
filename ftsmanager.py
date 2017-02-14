@@ -117,7 +117,7 @@ def _start_fts_transfer(job_id):
         _log.error('Exception creating FTS context in _start_fts_transfer')
         _log.error(str(e))
         ds = "Failed to create FTS context when setting up transfer"
-        _dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = %s"
+        _dbpool.runQuery("UPDATE jobs SET status='ERROR', extra_status = %s"
                          " WHERE job_id = %s", [ds, job_id])
         returnValue(None)
 
@@ -144,7 +144,7 @@ def _start_fts_transfer(job_id):
         _log.error('Error submitting job %s to FTS' % job_id)
         _log.error(str(e))
         ds = "Error submitting job to FTS"
-        _dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status = "
+        _dbpool.runQuery("UPDATE jobs SET status='ERROR', extra_status = "
                          "%s WHERE job_id = %s", [ds, job_id])
         returnValue(None)
 
@@ -158,7 +158,7 @@ def _start_fts_transfer(job_id):
         _log.error('Error updating status for job %s' % job_id)
         _log.error(str(e))
         ds = "Error updating job status following FTS submission"
-        _dbpool.runQuery("UPDATE jobs SET status='ERROR', detailed_status "
+        _dbpool.runQuery("UPDATE jobs SET status='ERROR', extra_status "
                          "= %s WHERE job_id = %s", [ds, job_id])
 
         returnValue(None)

@@ -62,7 +62,7 @@ class TransferStatus (Resource):
         def _report_results(txn):
             """Query DB for job and report results to user."""
             job_id = request.args['job_id'][0]
-            txn.execute("SELECT job_id, product_id, status, detailed_status, "
+            txn.execute("SELECT job_id, product_id, status, extra_status, "
                         "destination_path, submitter, fts_jobid, fts_details, "
                         "stager_path, stager_hostname, stager_status, "
                         "time_submitted, time_staging, time_staging_finished, "
@@ -70,7 +70,7 @@ class TransferStatus (Resource):
                         "jobs WHERE job_id = %s", [job_id])
             result = txn.fetchone()
             if result:
-                fields = ['job_id', 'product_id', 'status', 'detailed_status',
+                fields = ['job_id', 'product_id', 'status', 'extra_status',
                           'destination_path', 'submitter', 'fts_jobid',
                           'fts_details', 'stager_path', 'stager_hostname',
                           'stager_status', 'time_submitted', 'time_staging',
