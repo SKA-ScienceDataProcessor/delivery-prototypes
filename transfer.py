@@ -24,13 +24,14 @@ import time
 import twisted
 
 from OpenSSL import crypto, SSL
+from OpenSSL.crypto import X509StoreFlags
 from os.path import dirname, exists, expanduser, join, realpath
 from pika import ConnectionParameters
 from pika.adapters.twisted_connection import TwistedProtocolConnection
-
 from time import localtime, strftime
 from twisted.enterprise import adbapi
 from twisted.internet import defer, endpoints, protocol, reactor, ssl
+from twisted.internet._sslverify import CertBase
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.protocol import ClientCreator
 from twisted.logger import FileLogObserver, formatEvent, \
@@ -47,6 +48,9 @@ from transferstatus import TransferStatus
 # FTS and Staging backends
 from staging import init_staging
 from ftsmanager import init_fts_manager
+
+# Util methods
+from util import load_allowed_DNs
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
@@ -125,8 +129,10 @@ def main():
     d.addCallback(lambda protocol: protocol.ready)
     d.addCallback(_setupApp)
 
-    # Setup HTTP
+    # Create factory for site
     factory = Site(root)
+
+    # Setup HTTP
     endpoint = endpoints.TCP4ServerEndpoint(reactor, 8080,
                                             interface='127.0.0.1')
     endpoint.listen(factory)
@@ -154,14 +160,32 @@ def main():
     ctx_opt['extraCertChain'] = certchain_objs
     ctx_opt['enableSingleUseKeys'] = True
     ctx_opt['enableSessions'] = True
-    # ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
-    # ctx_opt['verify'] = True
-    # ctx_opt['requireCertificate'] = False
-    # ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
-    # ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
-    # sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443,
-    #                                            ssl_ctx_factory)
-    # sslendpoint.listen(factory)
+
+    # Configure a CA specified in the config file for X.509 client cert
+    # authentication (note that haven't yet gotten this working without
+    # requiring that the CA be manually specified)
+    clientca_path = configData.get('ssl', 'clientca')
+    with open(clientca_path, 'r') as f:
+        clientca_obj = _load_cert_function(f.read())
+        cb = CertBase(clientca_obj)
+        ctx_opt['trustRoot'] = ssl.trustRootFromCertificates([cb])
+
+    ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
+
+    # By default the SSL context factory doesn't support the use of X.509 proxy
+    # certificates. This must be enabled by setting a flag using a few methods.
+    ssl_context = ssl_ctx_factory.getContext()
+    ssl_cert_store = ssl_context.get_cert_store()
+    ssl_cert_store.set_flags(X509StoreFlags.ALLOW_PROXY_CERTS)
+
+    # Load a list of X.509 distinguished names which will grant access to
+    # the system
+    print(configData.get('auth', 'permitted'))
+    load_allowed_DNs(configData.get('auth', 'permitted'))
+
+    sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443,
+                                               ssl_ctx_factory)
+    sslendpoint.listen(factory)
 
     reactor.run()
 

@@ -53,7 +53,7 @@ To avoid mixing configuration and code, installs should specify their configurat
 ```sh
 . ~/venv/bin/activate
 cd ~/transferprototype
-./dummy_stager.py
+./transfer.py
 ```
 
 Dirs
@@ -139,6 +139,11 @@ fails instead uses the file `transfer.cfg` in the application directory.
 The application uses [ConfigParser](https://docs.python.org/2/library/configparser.html)
 with its INI-style formatting of the file.  It has the following fields:
 
+* `auth` section
+
+    * `permitted`: X.509 distinguished names permitted to use the service (one
+      per line
+
 * `ssl` section
 
     * `cert`: SSL certificate file
@@ -183,7 +188,7 @@ Note that for now using varchar(255) for the FTS job ID, although this might be 
 CREATE TABLE jobs (
 job_id VARCHAR(36),
 product_id TEXT,
-status ENUM('SUBMITTED', 'STAGING', 'DONESTAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
+status ENUM('INIT', 'SUBMITTED', 'STAGING', 'DONESTAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
 extra_status TEXT,
 destination_path TEXT,
 submitter TEXT,
@@ -205,11 +210,11 @@ PRIMARY KEY (job_id));
 TODO
 ===
 
-* Update fts_manager to use the FTS pool.
-
 * Rewrite start to launch using twistd rather than the current config script.
 
-* Support timeouts in case of stager failure
+* Support timeouts in case of stager failure. Note that additional resiliency might
+  require adding some degree of support for state representation in the stager.
+  It might also be best to do this using [RabbitMQ's delayed messages plugin](https://www.rabbitmq.com/blog/2015/04/16/scheduling-messages-with-rabbitmq/).
 
 * Ensure that if you have a series of callbacks that a single errback will prevent
   the callback chain from continuing if there's an error in one of the earlier
@@ -223,7 +228,25 @@ TODO
 
 * Better handling of missing values in config file
 
+* Add a context manager bit to ensure that we're not accumulating too many channels
+
 * Test suite
+
+* Add a basic product catalog verification service, which basically will tell you if
+  a product exists and, if so, what its size is (to better support QoS policies).
+
+* Transfer requests would likely need to start including information about a project
+  with which the transfer request is to be associated.
+
+* Move to a distributed semaphore of some sort limiting transfers?  (If we'd be using
+  a cluster of these servers, what should be enforced on a per-node basis and what on a
+  project-wide basis?).
+
+* Double check to ensure that a message can't be lost due to being ACKed before finished
+  processing.
+
+* Add a *Prepare* step after the staging is complete but before transfer.  This is most
+  likely to be a `noop` but 
 
 Known issues
 ===
@@ -232,11 +255,13 @@ Known issues
   occur.
 
 * the application doesn't automatically reconnect to rabbit mq in the event that the
-  connection to the server is broken.  
+  connection to the server is broken.  A previous attempt at introducing a package
+  providing a connection pool was unsuccessful.
 
 * X.509 client identification still isn't working so for now submitter information is
   not collected nor are authentication / authorization checks being done.  Currently
-  security is managed by only binding to the loopback interface.
+  security is managed by only binding to the loopback interface. (Or is oauth less of
+  a pain to get working?)
 
 * Note that at the moment the system is dependent on rabbitmq for managing the queues,
   but additional information about tasks is not currently made available there. It seems
@@ -244,6 +269,10 @@ Known issues
   see e.g., http://nithril.github.io/amqp/2015/07/05/fair-consuming-with-rabbitmq/ - but
   if this were implemented in this prototype then more information than just the job_id
   would likely need to be added to the queues.
+
+* It seems annoying cumbersome to work with multiple threads in twisted.  i.e. pretty
+  much none of the packages used are threadsafe including twisted (which fairly
+  significantly restricts the 
 
 * FTS transfers currently use default settings
 

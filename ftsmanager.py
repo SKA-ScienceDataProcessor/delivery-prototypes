@@ -65,13 +65,13 @@ def _FTSUpdater():
         returnValue(None)
 
     if r is None:
-        _log.info('FTS Updater found no jobs in the transferring state')
+        _log.debug('FTS Updater found no jobs in the transferring state')
         returnValue(None)
 
     # for each job get FTS status
-    try:
-        for job in r:
-            yield _log.debug('job_id: %s | fts_id: %s' % (job[0], job[1]))
+    jobsUpdated = 0
+    for job in r:
+        try:
             job_id = job[0]
             fts_jobid = job[1]
             fts_job_status = fts3.get_job_status(fts_context, fts_jobid)
@@ -85,6 +85,7 @@ def _FTSUpdater():
                                        "fts_details = %s WHERE job_id = %s",
                                        [str(fts_job_status), job_id])
                 yield _sem_fts.release()
+                jobsUpdated += 1
             elif state == 'FAILED':
                 _log.info('Job %s has failed during the transfer stage'
                           % job_id)
@@ -92,16 +93,19 @@ def _FTSUpdater():
                                        "fts_details = %s WHERE job_id = %s",
                                        [str(fts_job_status), job_id])
                 yield _sem_fts.release()
+                jobsUpdated += 1
             else:
                 yield _dbpool.runQuery("UPDATE jobs SET fts_details = %s "
                                        "WHERE job_id = %s",
                                        [str(fts_job_status), job_id])
-    except Exception, e:
-        _log.error('Error updating status for jobs in FTS manager')
-        _log.error(str(e))
-        returnValue(None)
-    _log.info('FTS Updater finished updating jobs that were in transferring '
-              'state')
+                jobsUpdated += 1
+        except Exception, e:
+            _log.error('Error updating status for jobs in FTS manager')
+            _log.error(str(e))
+            returnValue(None)
+    if jobsUpdated > 0:
+        _log.debug('FTS Updater updated the status of %s jobs that were in '
+                   'the TRANSFERRING state' % jobsUpdated)
 
 
 @inlineCallbacks

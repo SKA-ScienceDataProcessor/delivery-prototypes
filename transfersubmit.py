@@ -31,6 +31,8 @@ from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 from urlparse import urlparse
 
+from util import check_auth
+
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
@@ -87,6 +89,11 @@ class TransferSubmit (Resource):
         destination_path --- A URI specifying a GridFTP server location
             to transfer the product to.
         """
+
+        # dn = check_auth(request)
+        # if dn == NOT_DONE_YET:
+        #     return NOT_DONE_YET
+
         # Check fields and return an error if any are missing
         for formvar in ['product_id', 'destination_path']:
             if formvar not in request.args:
@@ -128,13 +135,13 @@ class TransferSubmit (Resource):
             Argument:
             txn --- database cursor
 
-            Note that the status of the record will be set to ERROR until
+            Note that the status of the record will be set to INIT until
             the job has been successfully added to the RabbitMQ transfer queue.
             """
             try:
                 txn.execute("INSERT INTO jobs (job_id, product_id, status, "
                             "destination_path, stager_callback, "
-                            "time_submitted) VALUES (%s, %s, 'ERROR', %s, "
+                            "time_submitted) VALUES (%s, %s, 'INIT', %s, "
                             "%s, now())",
                             [job_uuid, product_id, destination_path, callback])
             except Exception, e:
