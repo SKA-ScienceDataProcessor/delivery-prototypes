@@ -161,14 +161,14 @@ def main():
     ctx_opt['enableSingleUseKeys'] = True
     ctx_opt['enableSessions'] = True
 
-    # Configure a CA specified in the config file for X.509 client cert
-    # authentication (note that haven't yet gotten this working without
-    # requiring that the CA be manually specified)
-    clientca_path = configData.get('ssl', 'clientca')
-    with open(clientca_path, 'r') as f:
-        clientca_obj = _load_cert_function(f.read())
-        cb = CertBase(clientca_obj)
-        ctx_opt['trustRoot'] = ssl.trustRootFromCertificates([cb])
+    # Note that Ubuntu doesn't necessarily install CA certificates properly
+    # If following the recommended process (add CA cert with .crt extension
+    # to /usr/local/share/ca-certificates, run "sudo update-ca-certificates")
+    # that this is inadequate.  The certificate is added with a .pem extension
+    # but OpenSSL only detects it with a .0 extension.  The Grid Canada CA
+    # also produces two files with c_rehash is run, whereas
+    # update-ca-certificates only added one
+    ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
 
     ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
 

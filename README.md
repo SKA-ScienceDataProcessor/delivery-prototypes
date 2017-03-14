@@ -142,7 +142,7 @@ with its INI-style formatting of the file.  It has the following fields:
 * `auth` section
 
     * `permitted`: X.509 distinguished names permitted to use the service (one
-      per line
+      per line)
 
 * `ssl` section
 
@@ -210,11 +210,7 @@ PRIMARY KEY (job_id));
 TODO
 ===
 
-* Rewrite start to launch using twistd rather than the current config script.
-
-* Support timeouts in case of stager failure. Note that additional resiliency might
-  require adding some degree of support for state representation in the stager.
-  It might also be best to do this using [RabbitMQ's delayed messages plugin](https://www.rabbitmq.com/blog/2015/04/16/scheduling-messages-with-rabbitmq/).
+* Rewrite start to launch using twistd rather than the current script.
 
 * Ensure that if you have a series of callbacks that a single errback will prevent
   the callback chain from continuing if there's an error in one of the earlier
@@ -245,8 +241,20 @@ TODO
 * Double check to ensure that a message can't be lost due to being ACKed before finished
   processing.
 
-* Add a *Prepare* step after the staging is complete but before transfer.  This is most
-  likely to be a `noop` but 
+* Support timeouts in case of stager failure. Note that additional resiliency might
+  require adding some degree of support for state representation in the stager.
+  It might also be best to do this using [RabbitMQ's delayed messages plugin](https://www.rabbitmq.com/blog/2015/04/16/scheduling-messages-with-rabbitmq/).
+
+* Update staging process to allow for a `prepare` step, allowing simple computations
+  like averaging to be conducted on the data being staging.
+
+* Add an additional state which maintains information about which transfer tasks still
+  have files left on the staging nodes.
+
+* No notifications are sent anywhere to indicate that the transfers have completed.
+
+* Tracking / enforcing X.509 auth remains to be done though the system now runs on both
+  ports 8080 and 8443.
 
 Known issues
 ===
@@ -258,11 +266,6 @@ Known issues
   connection to the server is broken.  A previous attempt at introducing a package
   providing a connection pool was unsuccessful.
 
-* X.509 client identification still isn't working so for now submitter information is
-  not collected nor are authentication / authorization checks being done.  Currently
-  security is managed by only binding to the loopback interface. (Or is oauth less of
-  a pain to get working?)
-
 * Note that at the moment the system is dependent on rabbitmq for managing the queues,
   but additional information about tasks is not currently made available there. It seems
   that queuing order can be modified on rabbitmq to enforce some criteria of fairness -
@@ -272,7 +275,7 @@ Known issues
 
 * It seems annoying cumbersome to work with multiple threads in twisted.  i.e. pretty
   much none of the packages used are threadsafe including twisted (which fairly
-  significantly restricts the 
+  significantly restricts the amount of parallelism which can works.
 
 * FTS transfers currently use default settings
 
