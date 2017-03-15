@@ -20,12 +20,12 @@ from __future__ import print_function  # for python 2
 import json
 import pika
 import random
-import treq
+import requests
 import twisted
 
 from string import lowercase
 from sys import stderr
-from twisted.internet import defer, reactor
+from twisted.internet import defer, reactor, threads
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
                                    returnValue
 from twisted.logger import Logger
@@ -180,8 +180,8 @@ def _send_to_staging(job_id, token_len=32):
       'callback': _stager_callback,
     }
     try:
-        r = yield treq.get(_stager_uri, params=params)
-        if int(r.code) >= 400:
+        r = yield threads.deferToThread(requests.post, _stager_uri, data=params)
+        if int(r.status_code) >= 400:
             raise Exception('The stager reported an error - status was %s'
                             % r.code)
     except Exception, e:

@@ -19,7 +19,7 @@ virtualenv --system-site-packages venv
 # note that if you don’t use the version of M2Crypto available through apt,
 # due to how OpenSSL headers are defined in Ubuntu, you’ll get an SSL error
 # when trying to use it if installed by pip
-pip install pika twisted ConfigParser service_identity treq urllib3[secure] \
+pip install pika twisted ConfigParser service_identity requests urllib3[secure] \
   pyOpenSSL cryptography idna certifi mysql-python git+https://gitlab.cern.ch/fts/fts-rest
 pip install klein # this is only used for the dummy stager
 sudo touch /etc/authbind/byport/{80,443}
