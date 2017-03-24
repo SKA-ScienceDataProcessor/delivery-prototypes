@@ -84,7 +84,6 @@ def finish_staging(transfer_id, product_id, authcode, stager_success, staged_to,
     try:
         r = yield _dbpool.runQuery("UPDATE transfers SET "
                                    "status = 'DONESTAGING', "
-                                   "time_staging_finished = now(), "
                                    "stager_path = %s, "
                                    "stager_hostname = %s, "
                                    "stager_status = %s "
@@ -163,7 +162,6 @@ def _send_to_staging(transfer_id, token_len=32):
     # Update transfer status to staging and add callback code
     try:
         yield _dbpool.runQuery("UPDATE transfers SET status = 'STAGING', "
-                               "time_staging = now(), "
                                "stager_callback = %s WHERE transfer_id = %s",
                                (authcode, transfer_id))
     except Exception:

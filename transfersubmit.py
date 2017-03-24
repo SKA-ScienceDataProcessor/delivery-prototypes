@@ -140,9 +140,8 @@ class TransferSubmit (Resource):
             """
             try:
                 txn.execute("INSERT INTO transfers (transfer_id, product_id, status, "
-                            "destination_path, stager_callback, "
-                            "time_submitted) VALUES (%s, %s, 'INIT', %s, "
-                            "%s, now())",
+                            "destination_path, stager_callback) "
+                            "VALUES (%s, %s, 'INIT', %s, %s)",
                             [transfer_id, product_id, destination_path, callback])
             except Exception, e:
                 self._log.error(e)

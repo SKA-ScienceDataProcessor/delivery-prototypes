@@ -205,6 +205,27 @@ time_transferring TIMESTAMP NULL,
 time_error TIMESTAMP NULL,
 time_success TIMESTAMP NULL,
 PRIMARY KEY (transfer_id));
+
+# Ensure that timestamps are updated
+delimiter //
+CREATE TRIGGER update_transfer_timestamps BEFORE UPDATE ON transfers
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'SUBMITTED' THEN
+        SET NEW.time_submitted = NOW();
+    ELSEIF NEW.status = 'STAGING' THEN
+        SET NEW.time_staging = NOW();
+    ELSEIF NEW.status = 'DONESTAGING' THEN
+        SET NEW.time_staging_finished = NOW();
+    ELSEIF NEW.status = 'TRANSFERRING' THEN
+        SET NEW.time_transferring = NOW();
+    ELSEIF NEW.status = 'ERROR' THEN
+        SET NEW.time_error = NOW();
+    ELSEIF NEW.status = 'SUCCESS' THEN
+        SET NEW.time_success = NOW();
+    END IF;
+END;//
+delimiter ;
 ```
 
 TODO
@@ -218,9 +239,6 @@ TODO
 
 * Verify that whenever an error is reported that the database is updated to report this
   as well.
-
-* Make sure that the error timestamp is being set when the transfer status is being changed
-  to ERROR.  May want to do this at the DB level (for the other self._dbpooltimestamps as well)
 
 * Better handling of missing values in config file
 
@@ -252,6 +270,8 @@ TODO
   have files left on the staging nodes.
 
 * No notifications are sent anywhere to indicate that the transfers have completed.
+
+* Support multiple product IDs for a single transfer request
 
 * Tracking / enforcing X.509 auth remains to be done though the system now runs on both
   ports 8080 and 8443.
