@@ -84,7 +84,7 @@ def check_auth(request=None, transfer=None, returnError=True, mustMatch=None):
         yield request.setResponseCode(403)
         yield request.write(json.dumps({'error': True,
                                         'msg': 'Unauthorized',
-                                        'job_id': transfer
+                                        'transfer_id': transfer
                                         }))
         yield request.finish()
         returnValue(NOT_DONE_YET)

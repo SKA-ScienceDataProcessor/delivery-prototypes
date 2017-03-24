@@ -78,7 +78,7 @@ Transfers must be submitted using this API call and the POST method.
 
 JSON with the following fields:
 
-* `job_id`: The UUID for the job, or null if an error occurred.
+* `transfer_id`: The UUID for the transfer, or null if an error occurred.
 * `error`: Boolean
 * `msg`: A human readable message describing the result of the submission
 
@@ -93,11 +93,11 @@ This function uses the GET method
 
 **Parameters**
 
-* `job_id`: The relevant job ID
+* `transfer_id`: The relevant transfer ID
 
 **Returns**
 
-JSON with all non-null database fields except for the stager callback code for the job.
+JSON with all non-null database fields except for the stager callback code for the transfer.
 
 **HTTP status code**
 
@@ -115,7 +115,7 @@ tasks. It allows requests to use either GET or POST methods.
 
 **Parameters**
 
-* `job_id`: Job ID
+* `transfer_id`: Transfer ID
 * `product_id`: Product ID
 * `authcode`: Authorization code generated when the task was sent to the stager
 * `success`: A boolean indicating whether or not the product ID was successfully staged
@@ -164,7 +164,7 @@ with its INI-style formatting of the file.  It has the following fields:
 
 * `staging` section
 
-    * `concurrent_max`: The maximum number of concurrent staging jobs to allow
+    * `concurrent_max`: The maximum number of concurrent staging tasks to allow
     * `server`: URL of the staging server interface
     * `callback`: URL to contact once the staging has been completed
 
@@ -181,18 +181,18 @@ with its INI-style formatting of the file.  It has the following fields:
 Database description
 ===
 
-Note that for now using varchar(255) for the FTS job ID, although this might be a proper UUID
+Note that for now using varchar(255) for the FTS ID, although this might be a proper UUID
 (which the corresponding mysql function stores as a VARCHAR(36)).
 
 ```sql
-CREATE TABLE jobs (
-job_id VARCHAR(36),
+CREATE TABLE transfers (
+transfer_id VARCHAR(36),
 product_id TEXT,
 status ENUM('INIT', 'SUBMITTED', 'STAGING', 'DONESTAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
 extra_status TEXT,
 destination_path TEXT,
 submitter TEXT,
-fts_jobid VARCHAR(255),
+fts_id VARCHAR(255),
 fts_details TEXT,
 stager_callback VARCHAR(32),
 stager_path TEXT,
@@ -204,7 +204,7 @@ time_staging_finished TIMESTAMP NULL,
 time_transferring TIMESTAMP NULL,
 time_error TIMESTAMP NULL,
 time_success TIMESTAMP NULL,
-PRIMARY KEY (job_id));
+PRIMARY KEY (transfer_id));
 ```
 
 TODO
@@ -219,7 +219,7 @@ TODO
 * Verify that whenever an error is reported that the database is updated to report this
   as well.
 
-* Make sure that the error timestamp is being set when the job status is being changed
+* Make sure that the error timestamp is being set when the transfer status is being changed
   to ERROR.  May want to do this at the DB level (for the other self._dbpooltimestamps as well)
 
 * Better handling of missing values in config file
@@ -270,8 +270,8 @@ Known issues
   but additional information about tasks is not currently made available there. It seems
   that queuing order can be modified on rabbitmq to enforce some criteria of fairness -
   see e.g., http://nithril.github.io/amqp/2015/07/05/fair-consuming-with-rabbitmq/ - but
-  if this were implemented in this prototype then more information than just the job_id
-  would likely need to be added to the queues.
+  if this were implemented in this prototype then more information than just the
+  transfer_id would likely need to be added to the queues.
 
 * It seems annoying cumbersome to work with multiple threads in twisted.  i.e. pretty
   much none of the packages used are threadsafe including twisted (which fairly
@@ -282,15 +282,16 @@ Known issues
 Example commands
 ===
 
-* Submit a job:
+* Submit a transfer:
 ```sh
 # Get product ID 005
-curl http://localhost:8080/submitTransfer -d product_id=005 \
-  -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu`
+curl https://deliv-prot1.cyberska.org:8443/submitTransfer -d product_id=005 \
+    -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu/staged \
+    -E /tmp/x509up_u1000
 ```
 
 * Get transfer status:
 ```sh
-# Get status of job b8b14f92-e6f3-11e6-8265-fa163e434fb2
-curl http://localhost:8080/transferStatus?job_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2
+# Get status of transfer b8b14f92-e6f3-11e6-8265-fa163e434fb2
+curl http://localhost:8080/transferStatus?transfer_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2
 ```

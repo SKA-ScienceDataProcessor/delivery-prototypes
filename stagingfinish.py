@@ -27,9 +27,9 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 # API function fall: doneStaging
-# (have the stager signal that a job has been staged to local disk)
+# (have the stager signal that a transfer has been staged to local disk)
 class StagingFinish (Resource):
-    """Used to signal that a job has finished staging.
+    """Used to signal that a transfer has finished staging.
 
     Mounted at /doneStaging.
     """
@@ -50,7 +50,7 @@ class StagingFinish (Resource):
         """Handle GET request reporting stager completion."""
         try:
             params = {
-              'job_id': request.args['job_id'][0],
+              'transfer_id': request.args['transfer_id'][0],
               'product_id': request.args['product_id'][0],
               'authcode': request.args['authcode'][0],
               'stager_success': request.args['success'][0],

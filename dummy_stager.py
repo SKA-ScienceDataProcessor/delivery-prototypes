@@ -27,21 +27,44 @@ import json
 import os
 import string
 import sys
-import treq
+import requests
 import uuid
 
-from klein import run, route
+from klein import Klein
+from os.path import dirname, exists, expanduser, join, realpath
 from socket import gethostname as hostname
-from twisted.internet import defer, reactor
-from twisted.logger import Logger
+from twisted.internet import endpoints, reactor, threads
+from twisted.internet.defer import inlineCallbacks
+from twisted.python import log
+from twisted.web.server import Site
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
+# Init Klein and logging
+app = Klein()
+log.startLogging(sys.stdout)
 
-@defer.inlineCallbacks
-def _process_staging_request(job_id, product_id, callback, authcode):
+# Load config settings
+cfg_file = expanduser('~/.dummy_stager.cfg')
+if not exists(cfg_file):
+    cfg_file = join(dirname(realpath(__file__)), 'dummy_stager.cfg')
+configData = ConfigParser.ConfigParser()
+configData.read(cfg_file)
+
+# Little init script
+staging_src_dir = configData.get('directories', 'source')
+staging_dst_dir = configData.get('directories', 'destination')
+
+# Endpoint settings 
+ssl_cert = configData.get('ssl', 'cert')
+ssl_key = configData.get('ssl', 'key')
+ssl_chain = configData.get('ssl', 'chain')
+server_port = int(configData.get('endpoint', 'port'))
+
+@inlineCallbacks
+def _process_staging_request(transfer_id, product_id, callback, authcode):
     """Process a staging request."""
-    log.info("_process_staging_request (%s, %s, %s)"
+    log.msg("_process_staging_request (%s, %s, %s)"
              % (product_id, callback, authcode))
 
     src_path = os.path.join(staging_src_dir, product_id)
@@ -50,7 +73,7 @@ def _process_staging_request(job_id, product_id, callback, authcode):
 
     # Do the copy
     stagingError = None
-    log.info("About to link %s to %s" % (src_path, dst_path))
+    log.msg("About to link %s to %s" % (src_path, dst_path))
     try:
         yield os.link(src_path, dst_path)
     except Exception, e:
@@ -59,40 +82,42 @@ def _process_staging_request(job_id, product_id, callback, authcode):
     # Function to report results
     def _handle_reporting_error(failure, product_id, callback):
         failure.trap(Exception)
-        log.error("Error reporting staging results for product %s to %s"
+        log.err("Error reporting staging results for product %s to %s"
                   % (product_id, callback))
-        log.error(str(failure))
+        log.err(str(failure))
 
     if stagingError is not None:
         # Report error
         msg = ('Error copying product ID %s from %s to %s' %
                (product_id, src_path, dst_path))
-        log.error(msg)
-        log.error(str(e))
+        log.err(msg)
+        log.err(str(e))
         success = False
     else:
         msg = 'Product %s staged successfully to %s' % (product_id, dst_path)
         success = True
-    treq_result = treq.get(callback, params={'job_id': job_id,
-                                             'product_id': product_id,
-                                             'authcode': authcode,
-                                             'success': success,
-                                             'staged_to': hostname(),
-                                             'path': dst_path,
-                                             'msg': msg})
-    treq_result.addCallback(lambda r: log.info("Staging of product %s "
+    result = threads.deferToThread(requests.post,
+                                   callback,
+                                   data={'transfer_id': transfer_id,
+                                         'product_id': product_id,
+                                         'authcode': authcode,
+                                         'success': success,
+                                         'staged_to': hostname(),
+                                         'path': dst_path,
+                                         'msg': msg})
+    result.addCallback(lambda r: log.msg("Staging of product %s "
                                                "reported (result: %s)"
-                                               % (product_id, r.code)))
-    treq_result.addErrback(lambda e: _handle_reporting_error(e, product_id,
+                                               % (product_id, r.status_code)))
+    result.addErrback(lambda e: _handle_reporting_error(e, product_id,
                                                              callback))
 
 
-@route('/')
+@app.route('/')
 def root(request):
     """Called when a staging request has been received.
 
     Required params:
-    job_id -- (Transfer service) identifier for the job being staged
+    transfer_id -- (Transfer service) identifier for the transfer being staged
     product_id -- Product ID to be staged
     callback -- URI of a transfer service URL to be called upon completion
         of the staging tasks
@@ -108,30 +133,36 @@ def root(request):
 
     # Verify parameters
     try:
-        job_id = request.args.get('job_id')[0]
+        transfer_id = request.args.get('transfer_id')[0]
         product_id = request.args.get('product_id')[0]
         callback = request.args.get('callback')[0]
         authcode = request.args.get('authcode')[0]
     except Exception, e:
-        log.error(e)
-        request.setResponseCode(BAD_REQUEST)
-        return json.dumps({'status': 'Invalid parameters. A job_id, '
+        #log.err(str(e))
+        request.setResponseCode(400)
+        return json.dumps({'status': 'Invalid parameters. A transfer_id, '
                            'product_id, callback, and an authcode (for the '
                            'callback to pass along) '
                            'must be specified'})
 
     # Process request in separate thread
-    reactor.callInThread(_process_staging_request, job_id, product_id,
+    reactor.callInThread(_process_staging_request, transfer_id, product_id,
                          callback, authcode)
     return json.dumps({'status': 'Request for product ID %s queued'
                       % product_id})
 
-# Little init script
-staging_src_dir = os.path.expanduser('~/products')
-staging_dst_dir = os.path.expanduser('~/staging')
 
-log = Logger()
+# Setup HTTP
+endpoint = endpoints.TCP4ServerEndpoint(reactor, 8081,
+                                        interface='127.0.0.1')
+endpoint.listen(Site(app.resource()))
+reactor.run()
+
+
+
+#resource = app.resource
 
 # curl http://localhost:8081 -X POST -u fdsfdslakjvnc:fvngrq45u8ugfdlka -d \
 # product_id=001 -d authcode=123 -d callback=http://localhost:8080/doneStaging
-run('127.0.0.1', 8081)
+
+#run('127.0.0.1', 8081)

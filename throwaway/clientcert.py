@@ -118,16 +118,16 @@ certchain_objs = map(_load_cert_function, certchain)
 ctx_opt['extraCertChain'] = certchain_objs
 ctx_opt['enableSingleUseKeys'] = True
 ctx_opt['enableSessions'] = True
-# ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
-# ctx_opt['verify'] = True
-# ctx_opt['requireCertificate'] = True
-# ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
+ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
+#ctx_opt['verify'] = True
+#ctx_opt['requireCertificate'] = True
+#ctx_opt['caCerts'] = ssl.OpenSSLDefaultPaths()
 
 ## Load GridCanada CA for client cert
-clientca_path = configData.get('ssl', 'clientca')
-with open(clientca_path, 'r') as f:
-    clientca_obj = _load_cert_function(f.read())
-    ctx_opt['trustRoot'] = ssl.trustRootFromCertificates([CertBase(clientca_obj)])
+#clientca_path = configData.get('ssl', 'clientca')
+#with open(clientca_path, 'r') as f:
+#    clientca_obj = _load_cert_function(f.read())
+#    ctx_opt['trustRoot'] = ssl.trustRootFromCertificates([CertBase(clientca_obj)])
 
 ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
 

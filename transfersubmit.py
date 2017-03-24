@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Handle job submissions."""
+"""Handle transfer submissions."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -37,24 +37,24 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 class SubmitException (Exception):
-    """Track submit errors with option message and job ID.
+    """Track submit errors with option message and transfer ID.
 
     This is mounted at /submitTransfer.
     """
 
-    def __init__(self, msg=None, job_id=None):
-        """Denote an error, potentially associated with a message or job ID."""
+    def __init__(self, msg=None, transfer_id=None):
+        """Denote an error, potentially associated with a message or transfer ID."""
         self.msg = msg
-        self.job_id = job_id
+        self.transfer_id = transfer_id
 
     def toJSON(self):
         """Return error report in JSON format."""
-        result = {'error': True, 'job_id': self.job_id, 'msg': self.msg}
+        result = {'error': True, 'transfer_id': self.transfer_id, 'msg': self.msg}
         return json.dumps(result) + "\n"
 
 
 class TransferSubmit (Resource):
-    """Manage job submission, updating DB and RabbitMQ.
+    """Manage transfer submission, updating DB and RabbitMQ.
 
     Mounted at /submitTransfer.
     """
@@ -82,7 +82,7 @@ class TransferSubmit (Resource):
                                              delivery_mode=1)
 
     def render_POST(self, request):
-        """Manage POST request with job submission.
+        """Manage POST request with transfer submission.
 
         The request must contain the following parameters:
         product_id --- Unique identifier of the product being requested
@@ -100,7 +100,7 @@ class TransferSubmit (Resource):
                 request.setResponseCode(400)
                 result = {
                   'msg': 'Form did not specify {0}'.format(formvar),
-                  'job_id': None,
+                  'transfer_id': None,
                   'error': True,
                 }
                 return json.dumps(result) + "\n"
@@ -118,7 +118,7 @@ class TransferSubmit (Resource):
             result = {
               'msg': 'destination_path must be a URL specifying '
                      'a GridFTP server',
-              'job_id': None,
+              'transfer_id': None,
               'error': True,
             }
             return json.dumps(result) + "\n"
@@ -126,89 +126,89 @@ class TransferSubmit (Resource):
         # Doesn't validate this yet but probably should eventually
         product_id = request.args['product_id'][0]
 
-        job_uuid = str(uuid.uuid1())
+        transfer_id = str(uuid.uuid1())
         callback = ''.join(random.choice(string.lowercase) for i in range(32))
 
         def _add_initial(txn):
-            """Create initial database record for job.
+            """Create initial database record for transfer.
 
             Argument:
             txn --- database cursor
 
             Note that the status of the record will be set to INIT until
-            the job has been successfully added to the RabbitMQ transfer queue.
+            the transfer has been successfully added to the RabbitMQ transfer queue.
             """
             try:
-                txn.execute("INSERT INTO jobs (job_id, product_id, status, "
+                txn.execute("INSERT INTO transfers (transfer_id, product_id, status, "
                             "destination_path, stager_callback, "
                             "time_submitted) VALUES (%s, %s, 'INIT', %s, "
                             "%s, now())",
-                            [job_uuid, product_id, destination_path, callback])
+                            [transfer_id, product_id, destination_path, callback])
             except Exception, e:
                 self._log.error(e)
                 request.setResponseCode(500)
                 raise SubmitException('Error creating database record',
-                                      job_uuid)
+                                      transfer_id)
 
         # Add to rabbitmq
         @inlineCallbacks
         def _add_to_rabbitmq(_):
-            """Add the job to RabbitMQ."""
+            """Add the transfer to RabbitMQ."""
             channel = yield self._pika_conn.channel()
             yield channel.queue_declare(queue=self._staging_queue,
                                         exclusive=False, durable=True)
-            yield channel.basic_publish('', self._staging_queue, job_uuid,
+            yield channel.basic_publish('', self._staging_queue, transfer_id,
                                         self._pika_bp)
 
         def _update_status(txn):
-            """Update status of the job in the DB to SUBMITTED."""
+            """Update status of the transfer in the DB to SUBMITTED."""
             try:
-                txn.execute("UPDATE jobs SET status = 'SUBMITTED' WHERE "
-                            "job_id = %s", [job_uuid])
+                txn.execute("UPDATE transfers SET status = 'SUBMITTED' WHERE "
+                            "transfer_id = %s", [transfer_id])
             except Exception, e:
                 self._log.error(e)
                 request.setResponseCode(500)
-                msg = 'Error updating job status to STAGING'
+                msg = 'Error updating transfer status to STAGING'
                 result = {
                   'msg': msg,
-                  'job_id': job_uuid,
+                  'transfer_id': transfer_id,
                   'error': True
                 }
                 return json.dumps(result) + "\n"
 
         # Report results
-        def _report_job_creation(_):
-            """Report that the job submission was accepted with no errors."""
+        def _report_transfer_creation(_):
+            """Report that the transfer submission was accepted with no errors."""
             result = {
-              'msg': 'Job submission processed successfully',
+              'msg': 'Transfer submission processed successfully',
               'error': False,
-              'job_id': job_uuid
+              'transfer_id': transfer_id
             }
             request.setResponseCode(202)
             request.write(json.dumps(result) + "\n")
             request.finish()
-            self._log.info("Job submission of %s processed successfully"
-                           % job_uuid)
+            self._log.info("Transfer submission of %s processed successfully"
+                           % transfer_id)
 
         def _handleCreationError(e):
-            """Report that an error occured when processing the job."""
+            """Report that an error occured when processing the transfer."""
             request.setResponseCode(500)
             if isinstance(e, SubmitException):
                 request.write(e.toJSON())
             else:
                 self._log.error(e)
                 result = {
-                  'msg': 'Unknown error handling job submission',
-                  'job_id': job_uuid,
+                  'msg': 'Unknown error handling transfer submission',
+                  'transfer_id': transfer_id,
                   'error': True
                 }
                 request.write(json.dumps(result) + "\n")
             request.finish()
 
-        # Add callbacks to handle the job submission asynchronously
+        # Add callbacks to handle the transfer submission asynchronously
         d = self._dbpool.runInteraction(_add_initial)
         d.addCallback(_add_to_rabbitmq)
         d.addCallback(lambda _: self._dbpool.runInteraction(_update_status))
-        d.addCallback(_report_job_creation)
+        d.addCallback(_report_transfer_creation)
         d.addErrback(_handleCreationError)
         return NOT_DONE_YET

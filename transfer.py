@@ -180,7 +180,6 @@ def main():
 
     # Load a list of X.509 distinguished names which will grant access to
     # the system
-    print(configData.get('auth', 'permitted'))
     load_allowed_DNs(configData.get('auth', 'permitted'))
 
     sslendpoint = endpoints.SSL4ServerEndpoint(reactor, 8443,

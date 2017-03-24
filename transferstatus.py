@@ -46,32 +46,32 @@ class TransferStatus (Resource):
         self.log = Logger()
 
     def render_GET(self, request):
-        """Process GET request for job status.
+        """Process GET request for transfer status.
 
         Required parameter:
-        job_id -- identifier of the job to get status of.
+        transfer_id -- identifier of the transfer to get status of.
         """
-        if 'job_id' not in request.args:
+        if 'transfer_id' not in request.args:
             result = {
               'error': True,
-              'msg': 'No job ID specified'
+              'msg': 'No transfer ID specified'
             }
             request.setResponseCode(400)
             return json.dumps(result)
 
         def _report_results(txn):
-            """Query DB for job and report results to user."""
-            job_id = request.args['job_id'][0]
-            txn.execute("SELECT job_id, product_id, status, extra_status, "
-                        "destination_path, submitter, fts_jobid, fts_details, "
+            """Query DB for transfer and report results to user."""
+            transfer_id = request.args['transfer_id'][0]
+            txn.execute("SELECT transfer_id, product_id, status, extra_status, "
+                        "destination_path, submitter, fts_id, fts_details, "
                         "stager_path, stager_hostname, stager_status, "
                         "time_submitted, time_staging, time_staging_finished, "
                         "time_transferring, time_error, time_success FROM "
-                        "jobs WHERE job_id = %s", [job_id])
+                        "transfers WHERE transfer_id = %s", [transfer_id])
             result = txn.fetchone()
             if result:
-                fields = ['job_id', 'product_id', 'status', 'extra_status',
-                          'destination_path', 'submitter', 'fts_jobid',
+                fields = ['transfer_id', 'product_id', 'status', 'extra_status',
+                          'destination_path', 'submitter', 'fts_id',
                           'fts_details', 'stager_path', 'stager_hostname',
                           'stager_status', 'time_submitted', 'time_staging',
                           'time_staging_finished', 'time_transferring',
@@ -86,12 +86,12 @@ class TransferStatus (Resource):
                                          default=_serialize_with_dt) + "\n")
             else:
                 request.setResponseCode(404)
-                result = {'msg': "job_id {0} not found".format(job_id)}
+                result = {'msg': "transfer_id {0} not found".format(transfer_id)}
                 request.write(json.dumps(result) + "\n")
             request.finish()
 
         def _report_db_error(e):
-            """Report error if an issue was encountered getting job status."""
+            """Report error if an issue was encountered getting transfer status."""
             self.log.error(e)
             result = {
               'error': True,
@@ -101,7 +101,7 @@ class TransferStatus (Resource):
             request.write(json.dumps(result) + "\n")
             request.finish()
 
-        # Setup callbacks to return job status asynchronously
+        # Setup callbacks to return transfer status asynchronously
         d = self.dbpool.runInteraction(_report_results)
         d.addErrback(_report_db_error)
         return NOT_DONE_YET
