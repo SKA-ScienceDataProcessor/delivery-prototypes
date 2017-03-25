@@ -74,7 +74,8 @@ def _FTSUpdater():
         try:
             transfer_id = transfer[0]
             fts_id = transfer[1]
-            fts_job_status = fts3.get_job_status(fts_context, fts_id)
+            fts_job_status = fts3.get_job_status(fts_context, fts_id,
+                                                 list_files=True)
 
             # Compare and update
             state = fts_job_status['job_state']
@@ -143,7 +144,8 @@ def _start_fts_transfer(transfer_id):
         transfer = fts3.new_transfer(src, dst)
         fts_job = fts3.new_job([transfer])
         fts_id = fts3.submit(fts_context, fts_job)
-        fts_job_status = fts3.get_job_status(fts_context, fts_id)
+        fts_job_status = fts3.get_job_status(fts_context, fts_id,
+                                             list_files=True)
     except Exception, e:
         _log.error('Error submitting transfer %s to FTS' % transfer_id)
         _log.error(str(e))
