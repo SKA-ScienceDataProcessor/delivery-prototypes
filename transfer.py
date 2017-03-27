@@ -98,11 +98,13 @@ def main():
     root.putChild('', root)
 
     def _setupApp(pika_conn):
+        stager_dn = configData.get('staging', 'x509dn')
+
         # Add child web pages
         t_submit = TransferSubmit(dbpool, staging_queue, pika_conn)
         root.putChild('submitTransfer', t_submit)
         root.putChild('transferStatus', TransferStatus(dbpool))
-        root.putChild('doneStaging', StagingFinish(dbpool))
+        root.putChild('doneStaging', StagingFinish(dbpool, stager_dn))
 
         # Setup staging manager
         staging_concurrent_max = configData.get('staging', 'concurrent_max')

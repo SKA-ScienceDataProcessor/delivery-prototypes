@@ -69,6 +69,10 @@ REST API description
 
 Transfers must be submitted using this API call and the POST method.
 
+For a transfer request to be accepted the X.509 distinguished name of the certificate
+used must be listed as one of the `permitted` certificates in the `auth` section of
+the configuration file.
+
 **Parameters**
 
 * `product_id`
@@ -89,7 +93,10 @@ is well formed and specifies a GridFTP server.
 /transferStatus
 ---
 
-This function uses the GET method
+This function uses the GET method.
+
+Requests are only authorized if using the same certificate as when they made the
+original submission.
 
 **Parameters**
 
@@ -97,7 +104,7 @@ This function uses the GET method
 
 **Returns**
 
-JSON with all non-null database fields except for the stager callback code for the transfer.
+JSON with all database fields
 
 **HTTP status code**
 
@@ -113,11 +120,14 @@ JSON with all non-null database fields except for the stager callback code for t
 This is an internal call used to enable the stager to report the completion of staging
 tasks. It allows requests to use either GET or POST methods.
 
+Note that in order to post to this URL the certificate corresponding to the X.509
+distinguished name listed in the `staging` section of the config file as `x509dn` must
+be used when making the request.
+
 **Parameters**
 
 * `transfer_id`: Transfer ID
 * `product_id`: Product ID
-* `authcode`: Authorization code generated when the task was sent to the stager
 * `success`: A boolean indicating whether or not the product ID was successfully staged
 * `staged_to`: Hostname of the GridFTP server the product was staged to
 * `path`: Path at which the staged product was placed
@@ -167,6 +177,8 @@ with its INI-style formatting of the file.  It has the following fields:
     * `concurrent_max`: The maximum number of concurrent staging tasks to allow
     * `server`: URL of the staging server interface
     * `callback`: URL to contact once the staging has been completed
+    * `x509dn`: X.509 distinguished name of the certificate used by the stager to
+      communicate with the server
 
 * `fts` section
 
@@ -194,7 +206,6 @@ destination_path TEXT,
 submitter TEXT,
 fts_id VARCHAR(255),
 fts_details TEXT,
-stager_callback VARCHAR(32),
 stager_path TEXT,
 stager_hostname TEXT,
 stager_status TEXT,
@@ -272,9 +283,6 @@ TODO
 * No notifications are sent anywhere to indicate that the transfers have completed.
 
 * Support multiple product IDs for a single transfer request
-
-* Tracking / enforcing X.509 auth remains to be done though the system now runs on both
-  ports 8080 and 8443.
 
 Known issues
 ===

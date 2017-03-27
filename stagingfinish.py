@@ -23,6 +23,8 @@ from twisted.logger import Logger
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 
+from util import check_auth
+
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
@@ -36,7 +38,7 @@ class StagingFinish (Resource):
 
     isLeaf = True
 
-    def __init__(self, dbpool):
+    def __init__(self, dbpool, stager_dn):
         """Initialize transfer submission REST interface.
 
         Arguments:
@@ -44,6 +46,7 @@ class StagingFinish (Resource):
         """
         Resource.__init__(self)
         self.dbpool = dbpool
+        self.stager_dn = stager_dn
         self.log = Logger()
 
     def render_GET(self, request):
@@ -52,7 +55,6 @@ class StagingFinish (Resource):
             params = {
               'transfer_id': request.args['transfer_id'][0],
               'product_id': request.args['product_id'][0],
-              'authcode': request.args['authcode'][0],
               'stager_success': request.args['success'][0],
               'staged_to': request.args['staged_to'][0],
               'path': request.args['path'][0],
@@ -78,6 +80,13 @@ class StagingFinish (Resource):
             self.log.error(failure)
             request.setResponseCode(500)
             request.write('Exception thrown running finish_staging\n')
+            request.finish()
+
+        auth = check_auth(request, request.args['transfer_id'][0],
+                          True, self.stager_dn)
+        if not auth:
+            request.setResponseCode(403)
+            request.write('Unauthorized')
             request.finish()
 
         # Setup deferred to manage finish_staging asynchronously

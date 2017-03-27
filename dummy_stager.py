@@ -61,12 +61,16 @@ ssl_key = configData.get('ssl', 'key')
 ssl_chain = configData.get('ssl', 'chain')
 server_port = int(configData.get('endpoint', 'port'))
 
+# Transfer credentials
+stager_cert = configData.get('credentials', 'cert')
+stager_key = configData.get('credentials', 'key')
+
 
 @inlineCallbacks
-def _process_staging_request(transfer_id, product_id, callback, authcode):
+def _process_staging_request(transfer_id, product_id, callback):
     """Process a staging request."""
-    log.msg("_process_staging_request (%s, %s, %s)"
-            % (product_id, callback, authcode))
+    log.msg("_process_staging_request (%s, %s)"
+            % (product_id, callback))
 
     src_path = os.path.join(staging_src_dir, product_id)
     dst_path = os.path.join(staging_dst_dir,
@@ -101,11 +105,11 @@ def _process_staging_request(transfer_id, product_id, callback, authcode):
                                    callback,
                                    data={'transfer_id': transfer_id,
                                          'product_id': product_id,
-                                         'authcode': authcode,
                                          'success': success,
                                          'staged_to': hostname(),
                                          'path': dst_path,
-                                         'msg': msg})
+                                         'msg': msg},
+                                   cert=(stager_cert, stager_key))
     result.addCallback(lambda r: log.msg("Staging of product %s "
                                          "reported (result: %s)"
                                          % (product_id, r.status_code)))
@@ -122,8 +126,6 @@ def root(request):
     product_id -- Product ID to be staged
     callback -- URI of a transfer service URL to be called upon completion
         of the staging tasks
-    authcode -- Used to verify the identity of the stager when calling
-        the callback URI.
     """
     request.setHeader('Content-Type', 'application/json')
 
@@ -137,18 +139,15 @@ def root(request):
         transfer_id = request.args.get('transfer_id')[0]
         product_id = request.args.get('product_id')[0]
         callback = request.args.get('callback')[0]
-        authcode = request.args.get('authcode')[0]
     except Exception, e:
         # log.err(str(e))
         request.setResponseCode(400)
         return json.dumps({'status': 'Invalid parameters. A transfer_id, '
-                           'product_id, callback, and an authcode (for the '
-                           'callback to pass along) '
-                           'must be specified'})
+                           'product_id, and callback must be specified'})
 
     # Process request in separate thread
     reactor.callInThread(_process_staging_request, transfer_id, product_id,
-                         callback, authcode)
+                         callback)
     return json.dumps({'status': 'Request for product ID %s queued'
                       % product_id})
 

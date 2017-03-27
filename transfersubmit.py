@@ -135,7 +135,6 @@ class TransferSubmit (Resource):
         product_id = request.args['product_id'][0]
 
         transfer_id = str(uuid.uuid1())
-        callback = ''.join(random.choice(string.lowercase) for i in range(32))
 
         def _add_initial(txn):
             """Create initial database record for transfer.
@@ -149,10 +148,9 @@ class TransferSubmit (Resource):
             """
             try:
                 txn.execute("INSERT INTO transfers (transfer_id, product_id, "
-                            "status, destination_path, stager_callback, "
-                            "submitter) VALUES (%s, %s, 'INIT', %s, %s, %s)",
-                            [transfer_id, product_id, destination_path,
-                             callback, x509dn])
+                            "status, destination_path, submitter) VALUES (%s, "
+                            "%s, 'INIT', %s, %s)", [transfer_id, product_id,
+                                                    destination_path, x509dn])
             except Exception, e:
                 self._log.error(e)
                 request.setResponseCode(500)

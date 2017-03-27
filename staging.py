@@ -34,21 +34,20 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 @inlineCallbacks
-def finish_staging(transfer_id, product_id, authcode, stager_success,
+def finish_staging(transfer_id, product_id, stager_success,
                    staged_to, path, msg):
     """Update status when a staging task has been completed.
 
     This is called by StagingFinish when it has received notification from
     the stager that a task has been completed.
 
-    The function verifies the authcode recieved, updates the database to
-    reflect the completion of the task, and updates the semaphore to allow
-    another transfer to enter the STAGING portion of the transfer process.
+    The function updates the database to reflect the completion of the task,
+    and updates the semaphore to allow another transfer to enter the STAGING
+    portion of the transfer process.
 
     Required parameters:
     transfer_id -- ID of the transfer the product was staged as part of
     product_id -- ID of the product that was staged
-    authcode -- Authcode used by the stager to verify its identity
     stager_success -- Whether or not the stager reported success
     staged_to -- Hostname of the system to which the product was staged
     path -- Path of the staged file on the system it was staged to.
@@ -66,18 +65,6 @@ def finish_staging(transfer_id, product_id, authcode, stager_success,
     if not stager_success:
         _log.error('The stager reported failure staging transfer %s'
                    % transfer_id)
-        yield _sem_staging.release()
-        returnValue(False)
-
-    # Verify authcode against value returned from DB
-    try:
-        r = yield _dbpool.runQuery("SELECT stager_callback FROM transfers "
-                                   "WHERE transfer_id = %s", [transfer_id])
-        if r[0][0] != authcode:
-            raise Exception('Invalid authcode %s for transfer %s' % authcode,
-                            transfer_id)
-    except Exception, e:
-        yield _log.error(str(e))
         yield _sem_staging.release()
         returnValue(False)
 
@@ -122,14 +109,11 @@ def finish_staging(transfer_id, product_id, authcode, stager_success,
 
 
 @inlineCallbacks
-def _send_to_staging(transfer_id, token_len=32):
+def _send_to_staging(transfer_id):
     """Make call to stager to process transfer and update DB accordingly.
 
     Params:
     transfer_id -- Identifier of the transfer to stage
-    token_len -- Optional value specifying the length of the authcode
-      token passed to the stager for it to verify its identity when
-      reporting the completion of the staging process.
     """
     global _log
     global _dbpool
@@ -137,7 +121,7 @@ def _send_to_staging(transfer_id, token_len=32):
     global _stager_uri
     global _stager_callback
 
-    # Get transfer details from DB and create authcode for callback
+    # Get transfer details from DB
     try:
         r = yield _dbpool.runQuery("SELECT product_id FROM transfers WHERE "
                                    "transfer_id = %s", [transfer_id])
@@ -147,10 +131,10 @@ def _send_to_staging(transfer_id, token_len=32):
                          % transfer_id)
         yield _log.error(e)
         try:
-            _dbpool.runQuery("UPDATE transfers SET status = 'ERROR', "
-                             "extra_status = 'Error retrieving product ID "
-                             "when preparing to stage transfer' WHERE "
-                             "transfer_id = %s", [transfer_id])
+            yield _dbpool.runQuery("UPDATE transfers SET status = 'ERROR', "
+                                   "extra_status = 'Error retrieving product "
+                                   "ID when preparing to stage transfer' "
+                                   "WHERE transfer_id = %s", [transfer_id])
         except Exception:
             # Just _log this one as it might have been a broken DB that
             # triggered the original error.
@@ -159,16 +143,15 @@ def _send_to_staging(transfer_id, token_len=32):
         # Abort the staging request as it's impossible without a product ID
         yield _sem_staging.release()
         returnValue(None)
-    authcode = ''.join(random.choice(lowercase) for i in range(token_len))
 
-    # Update transfer status to staging and add callback code
+    # Update transfer status to staging
     try:
-        yield _dbpool.runQuery("UPDATE transfers SET status = 'STAGING', "
-                               "stager_callback = %s WHERE transfer_id = %s",
-                               (authcode, transfer_id))
-    except Exception:
-        yield _log.error('Error updating transfer status / recording stager '
-                         'callback code for transfer %s' % transfer_id)
+        yield _dbpool.runQuery("UPDATE transfers SET status = 'STAGING' "
+                               "WHERE transfer_id = %s", [transfer_id])
+    except Exception, e:
+        _log.error(str(e))
+        yield _log.error('Error updating status for transfer %s'
+                         % transfer_id)
         yield _sem_staging.release()
         returnValue(None)
 
@@ -176,7 +159,6 @@ def _send_to_staging(transfer_id, token_len=32):
     params = {
       'transfer_id': transfer_id,
       'product_id': product_id,
-      'authcode': authcode,
       'callback': _stager_callback,
     }
     try:
