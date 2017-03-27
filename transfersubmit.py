@@ -93,12 +93,12 @@ class TransferSubmit (Resource):
         x509dn = check_auth(request, None, returnError=False)
         if x509dn == NOT_DONE_YET:
             return NOT_DONE_YET
-        if x509dn == False or match_against_allowed(x509dn) == False:
+        if not x509dn or not match_against_allowed(x509dn):
             request.setResponseCode(403)
             result = {
                   'msg': 'Unauthorized',
                   'transfer_id': None,
-                  'error': True,            
+                  'error': True,
             }
             return json.dumps(result) + "\n"
 
