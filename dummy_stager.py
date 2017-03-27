@@ -55,17 +55,18 @@ configData.read(cfg_file)
 staging_src_dir = configData.get('directories', 'source')
 staging_dst_dir = configData.get('directories', 'destination')
 
-# Endpoint settings 
+# Endpoint settings
 ssl_cert = configData.get('ssl', 'cert')
 ssl_key = configData.get('ssl', 'key')
 ssl_chain = configData.get('ssl', 'chain')
 server_port = int(configData.get('endpoint', 'port'))
 
+
 @inlineCallbacks
 def _process_staging_request(transfer_id, product_id, callback, authcode):
     """Process a staging request."""
     log.msg("_process_staging_request (%s, %s, %s)"
-             % (product_id, callback, authcode))
+            % (product_id, callback, authcode))
 
     src_path = os.path.join(staging_src_dir, product_id)
     dst_path = os.path.join(staging_dst_dir,
@@ -83,7 +84,7 @@ def _process_staging_request(transfer_id, product_id, callback, authcode):
     def _handle_reporting_error(failure, product_id, callback):
         failure.trap(Exception)
         log.err("Error reporting staging results for product %s to %s"
-                  % (product_id, callback))
+                % (product_id, callback))
         log.err(str(failure))
 
     if stagingError is not None:
@@ -106,10 +107,10 @@ def _process_staging_request(transfer_id, product_id, callback, authcode):
                                          'path': dst_path,
                                          'msg': msg})
     result.addCallback(lambda r: log.msg("Staging of product %s "
-                                               "reported (result: %s)"
-                                               % (product_id, r.status_code)))
+                                         "reported (result: %s)"
+                                         % (product_id, r.status_code)))
     result.addErrback(lambda e: _handle_reporting_error(e, product_id,
-                                                             callback))
+                                                        callback))
 
 
 @app.route('/')
@@ -138,7 +139,7 @@ def root(request):
         callback = request.args.get('callback')[0]
         authcode = request.args.get('authcode')[0]
     except Exception, e:
-        #log.err(str(e))
+        # log.err(str(e))
         request.setResponseCode(400)
         return json.dumps({'status': 'Invalid parameters. A transfer_id, '
                            'product_id, callback, and an authcode (for the '
@@ -157,12 +158,3 @@ endpoint = endpoints.TCP4ServerEndpoint(reactor, 8081,
                                         interface='127.0.0.1')
 endpoint.listen(Site(app.resource()))
 reactor.run()
-
-
-
-#resource = app.resource
-
-# curl http://localhost:8081 -X POST -u fdsfdslakjvnc:fvngrq45u8ugfdlka -d \
-# product_id=001 -d authcode=123 -d callback=http://localhost:8080/doneStaging
-
-#run('127.0.0.1', 8081)

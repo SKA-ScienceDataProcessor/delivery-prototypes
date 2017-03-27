@@ -19,11 +19,12 @@ from __future__ import print_function  # for python 2
 
 import json
 
-from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet import reactor
+from twisted.logger import Logger
 from twisted.web.server import NOT_DONE_YET
 
 
+log = Logger()
 allowedDNs = None
 """List of X.509 DNs of certificates which are permitted access."""
 
@@ -34,7 +35,15 @@ def load_allowed_DNs(val):
     allowedDNs = filter(lambda x: x != '', val.splitlines())
 
 
-@inlineCallbacks
+def match_against_allowed(dn):
+    """Check if a particular X.509 distinguished name is allowed access."""
+    global allowedDNs
+    if isinstance(allowedDNs, list):
+        return (dn in allowedDNs)
+    else:
+        return False
+
+
 def check_auth(request=None, transfer=None, returnError=True, mustMatch=None):
     """Check if request is authorized to do transfer.
 
@@ -53,40 +62,50 @@ def check_auth(request=None, transfer=None, returnError=True, mustMatch=None):
     if request is None:
         raise Exception('Request not passed in')
 
-    def _get_base_certificate(cert):
-        """Return DN of first non-proxy cert encountered."""
+    def _get_base_name(cert):
+        """Return DN after stripping off proxy."""
         try:
             for i in range(0, cert.get_extension_count()):
-                ext = clientCertificate.get_extension(i)
+                ext = cert.get_extension(i)
                 if ext.get_short_name() == 'proxyCertInfo':
                     return cert.get_issuer()
-            return cert
+            return cert.get_subject()
         except Exception, e:
+            log.error(e)
             return None
 
     # Extract distinguished name from certificate
     try:
         possible_proxy = request.transport.getPeerCertificate()
-        basecert = _get_base_certificate(possible_proxy)
-        if basecert is not None:
-            components = basecert.get_components()
+        basename = _get_base_name(possible_proxy)
+        if basename is not None:
+            components = basename.get_components()
             components = map(lambda (x, y): '%s=%s' % (x, y), components)
             baseDN = '/' + '/'.join(components)
-            print('Got DN: %s\n' % baseDN)
+            # log.info('Got DN: %s\n' % baseDN)
             if mustMatch is not None:
-                returnValue(baseDN == mustMatch)
+                return baseDN == mustMatch
             else:
-                returnValue(baseDN)
+                return baseDN
     except Exception, e:
+        log.error(e)
+        if returnError:
+            request.setResponseCode(500)
+            request.write(json.dumps({'error': True,
+                                      'msg': 'Internal server error',
+                                      'transfer_id': transfer
+                                      }))
+            request.finish()
+            return NOT_DONE_YET
         raise Exception('error processing certificate')
 
     if returnError:
-        yield request.setResponseCode(403)
-        yield request.write(json.dumps({'error': True,
-                                        'msg': 'Unauthorized',
-                                        'transfer_id': transfer
-                                        }))
-        yield request.finish()
-        returnValue(NOT_DONE_YET)
+        request.setResponseCode(403)
+        request.write(json.dumps({'error': True,
+                                  'msg': 'Unauthorized',
+                                  'transfer_id': transfer
+                                  }))
+        request.finish()
+        return NOT_DONE_YET
     else:
-        returnValue(False)
+        return False

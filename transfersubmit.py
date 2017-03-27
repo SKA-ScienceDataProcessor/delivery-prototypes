@@ -31,7 +31,7 @@ from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 from urlparse import urlparse
 
-from util import check_auth
+from util import check_auth, match_against_allowed
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
@@ -43,13 +43,14 @@ class SubmitException (Exception):
     """
 
     def __init__(self, msg=None, transfer_id=None):
-        """Denote an error, potentially associated with a message or transfer ID."""
+        """Denote an error associated with a message or transfer ID."""
         self.msg = msg
         self.transfer_id = transfer_id
 
     def toJSON(self):
         """Return error report in JSON format."""
-        result = {'error': True, 'transfer_id': self.transfer_id, 'msg': self.msg}
+        result = {'error': True, 'transfer_id': self.transfer_id,
+                  'msg': self.msg}
         return json.dumps(result) + "\n"
 
 
@@ -89,10 +90,17 @@ class TransferSubmit (Resource):
         destination_path --- A URI specifying a GridFTP server location
             to transfer the product to.
         """
-
-        # dn = check_auth(request)
-        # if dn == NOT_DONE_YET:
-        #     return NOT_DONE_YET
+        x509dn = check_auth(request, None, returnError=False)
+        if x509dn == NOT_DONE_YET:
+            return NOT_DONE_YET
+        if x509dn == False or match_against_allowed(x509dn) == False:
+            request.setResponseCode(403)
+            result = {
+                  'msg': 'Unauthorized',
+                  'transfer_id': None,
+                  'error': True,            
+            }
+            return json.dumps(result) + "\n"
 
         # Check fields and return an error if any are missing
         for formvar in ['product_id', 'destination_path']:
@@ -136,13 +144,15 @@ class TransferSubmit (Resource):
             txn --- database cursor
 
             Note that the status of the record will be set to INIT until
-            the transfer has been successfully added to the RabbitMQ transfer queue.
+            the transfer has been successfully added to the RabbitMQ transfer
+            queue.
             """
             try:
-                txn.execute("INSERT INTO transfers (transfer_id, product_id, status, "
-                            "destination_path, stager_callback) "
-                            "VALUES (%s, %s, 'INIT', %s, %s)",
-                            [transfer_id, product_id, destination_path, callback])
+                txn.execute("INSERT INTO transfers (transfer_id, product_id, "
+                            "status, destination_path, stager_callback, "
+                            "submitter) VALUES (%s, %s, 'INIT', %s, %s, %s)",
+                            [transfer_id, product_id, destination_path,
+                             callback, x509dn])
             except Exception, e:
                 self._log.error(e)
                 request.setResponseCode(500)
@@ -177,7 +187,7 @@ class TransferSubmit (Resource):
 
         # Report results
         def _report_transfer_creation(_):
-            """Report that the transfer submission was accepted with no errors."""
+            """Report that transfer submission was accepted with no errors."""
             result = {
               'msg': 'Transfer submission processed successfully',
               'error': False,

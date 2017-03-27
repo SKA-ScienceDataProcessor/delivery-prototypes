@@ -60,6 +60,8 @@ class RootPage (Resource):
             for i in range(0,clientCertificate.get_extension_count()):
                 e = clientCertificate.get_extension(i)
                 if e.get_short_name() == 'proxyCertInfo':
+                    print('dir ext: %s\n\n' % str(dir(e)))
+                    print('alt name: %s\n\n' % str(e._subjectAltNameString))
                     #print (str(e.get_critical()) + '\n')
                     #print (str(e.get_data()) + '\n')
                     #print ('should try %s as real name' % clientCertificate.get_issuer())

@@ -34,8 +34,8 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
 @inlineCallbacks
-def finish_staging(transfer_id, product_id, authcode, stager_success, staged_to,
-                   path, msg):
+def finish_staging(transfer_id, product_id, authcode, stager_success,
+                   staged_to, path, msg):
     """Update status when a staging task has been completed.
 
     This is called by StagingFinish when it has received notification from
@@ -64,14 +64,15 @@ def finish_staging(transfer_id, product_id, authcode, stager_success, staged_to,
 
     # Report stager failure is something other than success was reported
     if not stager_success:
-        _log.error('The stager reported failure staging transfer %s' % transfer_id)
+        _log.error('The stager reported failure staging transfer %s'
+                   % transfer_id)
         yield _sem_staging.release()
         returnValue(False)
 
     # Verify authcode against value returned from DB
     try:
-        r = yield _dbpool.runQuery("SELECT stager_callback FROM transfers WHERE "
-                                   "transfer_id = %s", [transfer_id])
+        r = yield _dbpool.runQuery("SELECT stager_callback FROM transfers "
+                                   "WHERE transfer_id = %s", [transfer_id])
         if r[0][0] != authcode:
             raise Exception('Invalid authcode %s for transfer %s' % authcode,
                             transfer_id)
@@ -142,7 +143,8 @@ def _send_to_staging(transfer_id, token_len=32):
                                    "transfer_id = %s", [transfer_id])
         product_id = r[0][0]
     except Exception, e:
-        yield _log.error('Error retrieving product ID for transfer ID %s' % transfer_id)
+        yield _log.error('Error retrieving product ID for transfer ID %s'
+                         % transfer_id)
         yield _log.error(e)
         try:
             _dbpool.runQuery("UPDATE transfers SET status = 'ERROR', "
@@ -178,7 +180,8 @@ def _send_to_staging(transfer_id, token_len=32):
       'callback': _stager_callback,
     }
     try:
-        r = yield threads.deferToThread(requests.post, _stager_uri, data=params)
+        r = yield threads.deferToThread(requests.post, _stager_uri,
+                                        data=params)
         if int(r.status_code) >= 400:
             raise Exception('The stager reported an error - status was %s'
                             % r.code)
@@ -238,8 +241,8 @@ def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
     l_dbpool -- Globally shared database connection pool
     staging_queue -- Name of RabbitMQ queue to which staging requests are
       beging sent.
-    max_concurrent -- Maximum number of transfers permitted to be in the STAGING
-      state at any point in time
+    max_concurrent -- Maximum number of transfers permitted to be in the
+      STAGING state at any point in time
     stager_uri -- URI of the stager
     stager_callback -- Callback for stager to contact once staging complete
     transfer_queue -- Name of the RabbitMQ queue to which transfer requests

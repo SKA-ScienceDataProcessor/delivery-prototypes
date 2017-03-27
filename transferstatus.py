@@ -24,6 +24,8 @@ from twisted.logger import Logger
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 
+from util import check_auth
+
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
@@ -59,24 +61,38 @@ class TransferStatus (Resource):
             request.setResponseCode(400)
             return json.dumps(result)
 
+        # Check auth
+        x509dn = check_auth(request, request.args['transfer_id'][0],
+                            returnError=False)
+
         def _report_results(txn):
             """Query DB for transfer and report results to user."""
             transfer_id = request.args['transfer_id'][0]
-            txn.execute("SELECT transfer_id, product_id, status, extra_status, "
-                        "destination_path, submitter, fts_id, fts_details, "
-                        "stager_path, stager_hostname, stager_status, "
-                        "time_submitted, time_staging, time_staging_finished, "
-                        "time_transferring, time_error, time_success FROM "
-                        "transfers WHERE transfer_id = %s", [transfer_id])
+            txn.execute("SELECT transfer_id, product_id, status, "
+                        "extra_status, destination_path, submitter, fts_id, "
+                        "fts_details, stager_path, stager_hostname, "
+                        "stager_status, time_submitted, time_staging, "
+                        "time_staging_finished, time_transferring, time_error,"
+                        " time_success FROM transfers WHERE transfer_id = %s",
+                        [transfer_id])
             result = txn.fetchone()
             if result:
-                fields = ['transfer_id', 'product_id', 'status', 'extra_status',
-                          'destination_path', 'submitter', 'fts_id',
-                          'fts_details', 'stager_path', 'stager_hostname',
-                          'stager_status', 'time_submitted', 'time_staging',
-                          'time_staging_finished', 'time_transferring',
-                          'time_error', 'time_success']
+                fields = ['transfer_id', 'product_id', 'status',
+                          'extra_status', 'destination_path', 'submitter',
+                          'fts_id', 'fts_details', 'stager_path',
+                          'stager_hostname', 'stager_status', 'time_submitted',
+                          'time_staging', 'time_staging_finished',
+                          'time_transferring', 'time_error', 'time_success']
                 results = dict(zip(fields, result))
+
+                # Check authZ
+                if results['submitter'] != x509dn:
+                    request.setResponseCode(403)
+                    msg = "'%s' does not match submitter for transfer %s" % (
+                           x509dn, request.args['transfer_id'][0])
+                    request.write(json.dumps({'msg': msg}) + "\n")
+                    request.finish()
+                    return
 
                 def _serialize_with_dt(obj):
                     if isinstance(obj, datetime):
@@ -86,12 +102,12 @@ class TransferStatus (Resource):
                                          default=_serialize_with_dt) + "\n")
             else:
                 request.setResponseCode(404)
-                result = {'msg': "transfer_id {0} not found".format(transfer_id)}
+                result = {'msg': "transfer_id %s not found" % transfer_id}
                 request.write(json.dumps(result) + "\n")
             request.finish()
 
         def _report_db_error(e):
-            """Report error if an issue was encountered getting transfer status."""
+            """Report error if issue encountered getting transfer status."""
             self.log.error(e)
             result = {
               'error': True,

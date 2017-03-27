@@ -313,5 +313,6 @@ curl https://deliv-prot1.cyberska.org:8443/submitTransfer -d product_id=005 \
 * Get transfer status:
 ```sh
 # Get status of transfer b8b14f92-e6f3-11e6-8265-fa163e434fb2
-curl http://localhost:8080/transferStatus?transfer_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2
+curl https://deliv-prot1.cyberska.org:8443/transferStatus?transfer_id=b8b14f92-e6f3-11e6-8265-fa163e434fb2 \
+     -E /tmp/x509up_u1000
 ```

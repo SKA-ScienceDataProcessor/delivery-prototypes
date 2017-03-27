@@ -39,7 +39,7 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 # (scans FTS server at a regular interval, updating the status of tasks)
 @inlineCallbacks
 def _FTSUpdater():
-    """Contact FTS to update the status of transfers in the TRANSFERRING state."""
+    """Contact FTS to update the status of transfers in TRANSFERRING state."""
     global _log
     global _dbpool
     global _fts_params
@@ -57,8 +57,8 @@ def _FTSUpdater():
 
     # Retrieve list of transfers currently submitted to FTS from DB
     try:
-        r = yield _dbpool.runQuery("SELECT transfer_id, fts_id FROM transfers WHERE "
-                                   "status='TRANSFERRING'")
+        r = yield _dbpool.runQuery("SELECT transfer_id, fts_id FROM transfers "
+                                   "WHERE status='TRANSFERRING'")
     except Exception, e:
         _log.error('Error retrieving list of in transferring stage from DB')
         _log.error(str(e))
@@ -81,17 +81,20 @@ def _FTSUpdater():
             state = fts_job_status['job_state']
 
             if state == 'FINISHED':
-                _log.info('Transfer %s successfully completed using FTS' % transfer_id)
-                yield _dbpool.runQuery("UPDATE transfers SET status = 'SUCCESS', "
-                                       "fts_details = %s WHERE transfer_id = %s",
+                _log.info('Transfer %s successfully completed using FTS'
+                          % transfer_id)
+                yield _dbpool.runQuery("UPDATE transfers SET status = "
+                                       "'SUCCESS', fts_details = %s WHERE "
+                                       "transfer_id = %s",
                                        [str(fts_job_status), transfer_id])
                 yield _sem_fts.release()
                 transfersUpdated += 1
             elif state == 'FAILED':
                 _log.info('Transfer %s has failed during the transfer stage'
                           % transfer_id)
-                yield _dbpool.runQuery("UPDATE transfers SET status = 'ERROR', "
-                                       "fts_details = %s WHERE transfer_id = %s",
+                yield _dbpool.runQuery("UPDATE transfers SET status = "
+                                       "'ERROR', fts_details = %s WHERE "
+                                       "transfer_id = %s",
                                        [str(fts_job_status), transfer_id])
                 yield _sem_fts.release()
                 transfersUpdated += 1
@@ -105,8 +108,8 @@ def _FTSUpdater():
             _log.error(str(e))
             returnValue(None)
     if transfersUpdated > 0:
-        _log.debug('FTS Updater updated the status of %s transfers that were in '
-                   'the TRANSFERRING state' % transfersUpdated)
+        _log.debug('FTS Updater updated the status of %s transfers that were '
+                   'in the TRANSFERRING state' % transfersUpdated)
 
 
 @inlineCallbacks
@@ -122,13 +125,15 @@ def _start_fts_transfer(transfer_id):
         _log.error('Exception creating FTS context in _start_fts_transfer')
         _log.error(str(e))
         ds = "Failed to create FTS context when setting up transfer"
-        _dbpool.runQuery("UPDATE transfers SET status='ERROR', extra_status = %s"
-                         " WHERE transfer_id = %s", [ds, transfer_id])
+        _dbpool.runQuery("UPDATE transfers SET status='ERROR', "
+                         "extra_status = %s WHERE transfer_id = %s",
+                         [ds, transfer_id])
         returnValue(None)
 
     # Get information about the transfer from the database
     r = yield _dbpool.runQuery("SELECT stager_path, stager_hostname, "
-                               "destination_path FROM transfers WHERE transfer_id = %s",
+                               "destination_path FROM transfers WHERE "
+                               "transfer_id = %s",
                                [transfer_id])
     if r is None:
         _log.error('Invalid transfer_id %s received by FTS transfer service'
@@ -227,9 +232,9 @@ def init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
       transfer requests
     concurrent_max -- Maximum number of transfers that are permitted to be
       in the TRANSFERRING stage at any point in time
-    polling_interval -- Interval in seconds between polling attempts of the
-      FTS server to update the status of transfers currently in the TRANSFERRING
-      state
+    polling_interval -- Interval in seconds between polling attempts of
+      the FTS server to update the status of transfers currently in the
+      TRANSFERRING state
     """
     global _log
     global _dbpool
@@ -249,6 +254,7 @@ def init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
     # Start queue listener
     reactor.callFromThread(_transfer_queue_listener)
 
-    # Run a task at a regular interval to update the status of submitted transfers
+    # Run a task at a regular interval to update the status of
+    # submitted transfers
     fts_updater_runner = LoopingCall(_FTSUpdater)
     fts_updater_runner.start(int(polling_interval))
