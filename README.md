@@ -179,6 +179,8 @@ with its INI-style formatting of the file.  It has the following fields:
     * `callback`: URL to contact once the staging has been completed
     * `x509dn`: X.509 distinguished name of the certificate used by the stager to
       communicate with the server
+    * `cert`: Path to an X.509 certificate to use
+    * `key`: Path to key for certificate
 
 * `fts` section
 

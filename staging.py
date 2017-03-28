@@ -120,6 +120,8 @@ def _send_to_staging(transfer_id):
     global _sem_staging
     global _stager_uri
     global _stager_callback
+    global _staging_cert
+    global _staging_key
 
     # Get transfer details from DB
     try:
@@ -163,7 +165,8 @@ def _send_to_staging(transfer_id):
     }
     try:
         r = yield threads.deferToThread(requests.post, _stager_uri,
-                                        data=params)
+                                        data=params,
+                                        cert=(_staging_cert, _staging_key))
         if int(r.status_code) >= 400:
             raise Exception('The stager reported an error - status was %s'
                             % r.code)
@@ -211,7 +214,7 @@ def _staging_queue_listener():
 
 @inlineCallbacks
 def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
-                 stager_callback, transfer_queue):
+                 stager_callback, transfer_queue, staging_cert, staging_key):
     """Initialize thread to manage the staging process.
 
     Note that this function also initializes a semaphore used to enforce a
@@ -229,6 +232,8 @@ def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
     stager_callback -- Callback for stager to contact once staging complete
     transfer_queue -- Name of the RabbitMQ queue to which transfer requests
       should be sent.
+    staging_cert -- Path to an X.509 cert to authenticate to stager with
+    staging_key -- Key corresponding to the staging_cert
     """
     global _dbpool
     global _log
@@ -238,6 +243,8 @@ def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
     global _stager_uri
     global _stager_callback
     global _transfer_queue
+    global _staging_cert
+    global _staging_key
 
     _log = Logger()
 
@@ -251,5 +258,7 @@ def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
     _stager_uri = stager_uri
     _stager_callback = stager_callback
     _transfer_queue = transfer_queue
+    _staging_cert = staging_cert
+    _staging_key = staging_key
 
     reactor.callFromThread(_staging_queue_listener)

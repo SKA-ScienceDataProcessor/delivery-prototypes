@@ -31,9 +31,10 @@ import requests
 import uuid
 
 from klein import Klein
+from OpenSSL import crypto
 from os.path import dirname, exists, expanduser, join, realpath
 from socket import gethostname as hostname
-from twisted.internet import endpoints, reactor, threads
+from twisted.internet import endpoints, reactor, ssl, threads
 from twisted.internet.defer import inlineCallbacks
 from twisted.python import log
 from twisted.web.server import Site
@@ -64,6 +65,10 @@ server_port = int(configData.get('endpoint', 'port'))
 # Transfer credentials
 stager_cert = configData.get('credentials', 'cert')
 stager_key = configData.get('credentials', 'key')
+
+# Get list of DNs allowed access
+config_dns = configData.get('auth', 'permitted')
+allowedDNs = filter(lambda x: x != '', config_dns.splitlines())
 
 
 @inlineCallbacks
@@ -129,10 +134,20 @@ def root(request):
     """
     request.setHeader('Content-Type', 'application/json')
 
-    # Verify authorization
-    # if request.getUser() != 'user' or request.getPassword() != 'pass':
-    #   request.setResponseCode(403)
-    #   return json.dumps({'status': 'Invalid username and/or password'})
+    # Extract certificate DN & verify authorization
+    cert = request.transport.getPeerCertificate()
+    basename = cert.get_subject()
+    for i in range(0, cert.get_extension_count()):
+        ext = cert.get_extension(i)
+        if ext.get_short_name() == 'proxyCertInfo':
+            basename = cert.get_issuer()
+            break
+    components = basename.get_components()
+    components = map(lambda (x, y): '%s=%s' % (x, y), components)
+    baseDN = '/' + '/'.join(components)
+    if baseDN not in allowedDNs:
+        request.setResponseCode(403)
+        return json.dumps({'status': 'Unauthorized'})
 
     # Verify parameters
     try:
@@ -152,8 +167,33 @@ def root(request):
                       % product_id})
 
 
-# Setup HTTP
-endpoint = endpoints.TCP4ServerEndpoint(reactor, 8081,
-                                        interface='127.0.0.1')
+# Setup SSL
+def _load_cert_function(x):
+    return crypto.load_certificate(crypto.FILETYPE_PEM, x)
+ctx_opt = {}
+with open(ssl_cert, 'r') as f:
+    ctx_opt['certificate'] = _load_cert_function(f.read())
+with open(ssl_key, 'r') as f:
+    ctx_opt['privateKey'] = crypto.load_privatekey(crypto.FILETYPE_PEM,
+                                                   f.read())
+with open(ssl_chain, 'r') as f:
+    certchain = []
+    for line in f:
+        if '-----BEGIN CERTIFICATE-----' in line:
+            certchain.append(line)
+        else:
+            certchain[-1] = certchain[-1] + line
+certchain_objs = map(_load_cert_function, certchain)
+ctx_opt['extraCertChain'] = certchain_objs
+ctx_opt['enableSingleUseKeys'] = True
+ctx_opt['enableSessions'] = True
+ctx_opt['trustRoot'] = ssl.OpenSSLDefaultPaths()
+ssl_ctx_factory = ssl.CertificateOptions(**ctx_opt)
+# X509StoreFlags.ALLOW_PROXY_CERTS is what needs to be enabled for proxy certs
+ssl_context = ssl_ctx_factory.getContext()
+ssl_cert_store = ssl_context.get_cert_store()
+ssl_cert_store.set_flags(crypto.X509StoreFlags.ALLOW_PROXY_CERTS)
+
+endpoint = endpoints.SSL4ServerEndpoint(reactor, server_port, ssl_ctx_factory)
 endpoint.listen(Site(app.resource()))
 reactor.run()

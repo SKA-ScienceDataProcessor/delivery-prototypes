@@ -110,8 +110,11 @@ def main():
         staging_concurrent_max = configData.get('staging', 'concurrent_max')
         staging_url = configData.get('staging', 'server')
         staging_callback = configData.get('staging', 'callback')
+        staging_cert = configData.get('staging', 'cert')
+        staging_key = configData.get('staging', 'key')
         init_staging(pika_conn, dbpool, staging_queue, staging_concurrent_max,
-                     staging_url, staging_callback, transfer_queue)
+                     staging_url, staging_callback, transfer_queue,
+                     staging_cert, staging_key)
 
         # Setup FTS manager
         fts_concurrent_max = configData.get('fts', 'concurrent_max')
@@ -133,11 +136,6 @@ def main():
 
     # Create factory for site
     factory = Site(root)
-
-    # Setup HTTP
-    endpoint = endpoints.TCP4ServerEndpoint(reactor, 8080,
-                                            interface='127.0.0.1')
-    endpoint.listen(factory)
 
     # Setup SSL
     def _load_cert_function(x):
