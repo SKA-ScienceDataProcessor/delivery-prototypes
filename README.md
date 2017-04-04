@@ -244,57 +244,15 @@ delimiter ;
 TODO
 ===
 
-* Rewrite start to launch using twistd rather than the current script.
-
-* Ensure that if you have a series of callbacks that a single errback will prevent
-  the callback chain from continuing if there's an error in one of the earlier
-  callbacks.
-
-* Verify that whenever an error is reported that the database is updated to report this
-  as well.
-
-* Better handling of missing values in config file
-
-* Add a context manager bit to ensure that we're not accumulating too many channels
-
-* Test suite
-
 * Add a basic product catalog verification service, which basically will tell you if
   a product exists and, if so, what its size is (to better support QoS policies).
 
 * Transfer requests would likely need to start including information about a project
   with which the transfer request is to be associated.
 
-* Move to a distributed semaphore of some sort limiting transfers?  (If we'd be using
-  a cluster of these servers, what should be enforced on a per-node basis and what on a
-  project-wide basis?).
-
-* Double check to ensure that a message can't be lost due to being ACKed before finished
-  processing.
-
-* Support timeouts in case of stager failure. Note that additional resiliency might
-  require adding some degree of support for state representation in the stager.
-  It might also be best to do this using [RabbitMQ's delayed messages plugin](https://www.rabbitmq.com/blog/2015/04/16/scheduling-messages-with-rabbitmq/).
-
-* Update staging process to allow for a `prepare` step, allowing simple computations
-  like averaging to be conducted on the data being staging.
-
-* Add an additional state which maintains information about which transfer tasks still
-  have files left on the staging nodes.
-
-* No notifications are sent anywhere to indicate that the transfers have completed.
-
-* Support multiple product IDs for a single transfer request
 
 Known issues
 ===
-
-* The semaphore's state is not saved when exiting the program, and thus errors may
-  occur.
-
-* the application doesn't automatically reconnect to rabbit mq in the event that the
-  connection to the server is broken.  A previous attempt at introducing a package
-  providing a connection pool was unsuccessful.
 
 * Note that at the moment the system is dependent on rabbitmq for managing the queues,
   but additional information about tasks is not currently made available there. It seems
