@@ -32,6 +32,8 @@ from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
 from twisted.internet.task import LoopingCall
 from twisted.logger import Logger
 
+from util import get_files_in_dir
+
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
@@ -141,13 +143,21 @@ def _start_fts_transfer(transfer_id):
         returnValue(None)
 
     # Create the transfer request
+    localpath = str(r[0][0])
     src = 'gsiftp://%s%s' % (r[0][1], str(r[0][0]).rstrip(os.sep))
     dst = '%s/%s' % (str(r[0][2]).rstrip('/'), basename(r[0][0]))
     _log.info("About to transfer '%s' to '%s' for transfer %s" %
               (src, dst, transfer_id))
     try:
-        transfer = fts3.new_transfer(src, dst)
-        fts_job = fts3.new_job([transfer])
+        if os.path.isdir(localpath):
+            files = get_files_in_dir(localpath)
+            transfers = []
+            for file in files:
+                transfers.append(fts3.new_transfer(src + '/' + file,
+                                                   dst + '/' + file))
+        else:
+            transfers = [fts3.new_transfer(src, dst)]
+        fts_job = fts3.new_job(transfers)
         fts_id = fts3.submit(fts_context, fts_job)
         fts_job_status = fts3.get_job_status(fts_context, fts_id,
                                              list_files=True)

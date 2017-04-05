@@ -17,6 +17,8 @@
 
 from __future__ import print_function  # for python 2
 
+import os
+import os.path
 import json
 
 from twisted.internet import reactor
@@ -109,3 +111,29 @@ def check_auth(request=None, transfer=None, returnError=True, mustMatch=None):
         return NOT_DONE_YET
     else:
         return False
+
+
+def get_files_in_dir(path):
+    """Return a list of files in the specified dir (and its subdirs).
+
+    This is used to create a list of files which FTS is must transfer at a
+    single point in time.
+
+    Arguments:
+        path -- The directory to traverse looking for files.
+
+    Return Value:
+        a list containing relative paths to file in the specified directory
+        as well as in any subdirectories
+
+    Warning:
+        any exceptions encountered creating the list will *not* be captured
+        by the function and should be handled upstream.
+    """
+    files = []
+    realpath = os.path.realpath(path)
+    for dir, _, filenames in os.walk(realpath):
+        full = map(lambda x: os.path.join(dir, x), filenames)
+        noprefix = map(lambda x: x[len(realpath) + len(os.sep):], full)
+        files += noprefix
+    return files

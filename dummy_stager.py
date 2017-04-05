@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 """A minimalist staging engine simulator.
 
-This service only binds to the loopback interface, performs no authorization
-checks, and maintains no state information about staging tasks either in
-process or completed.
+This service performs X.509 authn/z of incoming requests but does not
+allow for the status of current or past transfers to be queried.
 """
 # Copyright 2017 University of Cape Town
 # This program is free software: you can redistribute it and/or modify
@@ -25,6 +24,7 @@ from __future__ import print_function  # for python 2
 import ConfigParser
 import json
 import os
+import shutil
 import string
 import sys
 import requests
@@ -71,21 +71,26 @@ config_dns = configData.get('auth', 'permitted')
 allowedDNs = filter(lambda x: x != '', config_dns.splitlines())
 
 
-@inlineCallbacks
 def _process_staging_request(transfer_id, product_id, callback):
     """Process a staging request."""
     log.msg("_process_staging_request (%s, %s)"
             % (product_id, callback))
 
     src_path = os.path.join(staging_src_dir, product_id)
-    dst_path = os.path.join(staging_dst_dir,
-                            str(product_id) + "-" + str(uuid.uuid1()))
+    dst_path = os.path.join(staging_dst_dir, str(uuid.uuid1()))
 
     # Do the copy
     stagingError = None
     log.msg("About to link %s to %s" % (src_path, dst_path))
     try:
-        yield os.link(src_path, dst_path)
+        os.mkdir(dst_path)
+        dst_file = os.path.join(dst_path, str(product_id))
+        if os.path.isdir(src_path):
+            shutil.copytree(src_path, dst_file)
+        elif os.path.isfile(src_path):
+            os.link(src_path, dst_file)
+        else:
+            raise Exception("Product %s not found" % product_id) 
     except Exception, e:
         stagingError = e
 
