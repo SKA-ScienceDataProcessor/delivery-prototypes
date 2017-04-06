@@ -57,55 +57,55 @@ def finish_staging(transfer_id, product_id, stager_success,
     A boolean indicating whether or not an error was successfully processed.
     """
     global _dbpool
-    global _transfer_queue
+    global _prepare_queue
     global _pika_conn
     global _sem_staging
 
-    # Report stager failure is something other than success was reported
-    if not stager_success:
-        _log.error('The stager reported failure staging transfer %s'
-                   % transfer_id)
-        yield _sem_staging.release()
-        returnValue(False)
-
-    # Update database information
     try:
-        r = yield _dbpool.runQuery("UPDATE transfers SET "
-                                   "status = 'DONESTAGING', "
-                                   "stager_path = %s, "
-                                   "stager_hostname = %s, "
-                                   "stager_status = %s "
-                                   "WHERE transfer_id = %s",
-                                   [path, staged_to, msg, transfer_id])
-    except Exception, e:
-        yield _log.error('Error updating DB to report staging finished for '
-                         'transfer %s' % transfer_id)
-        yield _log.error(str(e))
-        yield _sem_staging.release()
-        returnValue(False)
+        # Report stager failure is something other than success was reported
+        if not stager_success:
+            _log.error('The stager reported failure staging transfer %s'
+                       % transfer_id)
+            returnValue(False)
 
-    # Add to transfer queue
-    try:
-        pika_send_properties = pika.BasicProperties(content_type='text/plain',
-                                                    delivery_mode=1)
-        channel = yield _pika_conn.channel()
-        yield channel.queue_declare(queue=_transfer_queue, exclusive=False,
-                                    durable=True)
-        yield channel.basic_publish('', _transfer_queue, transfer_id,
-                                    pika_send_properties)
-    except Exception, e:
-        yield _log.error('Error adding transfer %s to rabbitmq transfer queue'
-                         % transfer_id)
-        yield _log.error(str(e))
-        yield _sem_staging.release()
-        returnValue(False)
+        # Update database information
+        try:
+            r = yield _dbpool.runQuery("UPDATE transfers SET "
+                                       "status = 'STAGINGDONE', "
+                                       "stager_path = %s, "
+                                       "stager_hostname = %s, "
+                                       "stager_status = %s "
+                                       "WHERE transfer_id = %s",
+                                       [path, staged_to, msg, transfer_id])
+        except Exception, e:
+            yield _log.error('Error updating DB to report staging finished '
+                             'for transfer %s' % transfer_id)
+            yield _log.error(str(e))
+            returnValue(False)
+
+        # Add to prepare queue
+        try:
+            send_properties = pika.BasicProperties(content_type='text/plain',
+                                                   delivery_mode=1)
+            channel = yield _pika_conn.channel()
+            yield channel.queue_declare(queue=_prepare_queue,
+                                        exclusive=False, durable=True)
+            yield channel.basic_publish('', _prepare_queue, transfer_id,
+                                        send_properties)
+        except Exception, e:
+            yield _log.error('Error adding transfer %s to rabbitmq prepare '
+                             'queue' % transfer_id)
+            yield _log.error(str(e))
+            returnValue(False)
+        finally:
+            yield channel.close()
+
+        # Allow next transfer into staging and report results
+        yield _log.info("Completed staging of %s" % transfer_id)
+        returnValue(True)
     finally:
-        yield channel.close()
-
-    # Allow next transfer into staging and report results
-    yield _log.info("Completed staging of %s" % transfer_id)
-    yield _sem_staging.release()
-    returnValue(True)
+        # Remember to release the semaphore once done
+        yield _sem_staging.release()
 
 
 @inlineCallbacks
@@ -213,8 +213,9 @@ def _staging_queue_listener():
 
 
 @inlineCallbacks
-def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
-                 stager_callback, transfer_queue, staging_cert, staging_key):
+def init_staging(pika_conn, dbpool, staging_queue, max_concurrent,
+                 prepare_queue, stager_uri, stager_callback, staging_cert,
+                 staging_key):
     """Initialize thread to manage the staging process.
 
     Note that this function also initializes a semaphore used to enforce a
@@ -228,21 +229,21 @@ def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
       beging sent.
     max_concurrent -- Maximum number of transfers permitted to be in the
       STAGING state at any point in time
+    prepare_queue -- Name of the RabbitMQ queue to which prepare requests
+      should be sent.
     stager_uri -- URI of the stager
     stager_callback -- Callback for stager to contact once staging complete
-    transfer_queue -- Name of the RabbitMQ queue to which transfer requests
-      should be sent.
     staging_cert -- Path to an X.509 cert to authenticate to stager with
     staging_key -- Key corresponding to the staging_cert
     """
     global _dbpool
     global _log
     global _pika_conn
+    global _prepare_queue
     global _sem_staging
     global _staging_queue
     global _stager_uri
     global _stager_callback
-    global _transfer_queue
     global _staging_cert
     global _staging_key
 
@@ -253,11 +254,11 @@ def init_staging(pika_conn, dbpool, staging_queue, max_concurrent, stager_uri,
 
     _pika_conn = pika_conn
     _dbpool = dbpool
+    _prepare_queue = prepare_queue
     _sem_staging = DeferredSemaphore(int(max_concurrent))
     _staging_queue = staging_queue
     _stager_uri = stager_uri
     _stager_callback = stager_callback
-    _transfer_queue = transfer_queue
     _staging_cert = staging_cert
     _staging_key = staging_key
 

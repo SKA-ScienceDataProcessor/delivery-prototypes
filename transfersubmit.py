@@ -134,6 +134,10 @@ class TransferSubmit (Resource):
         # Doesn't validate this yet but probably should eventually
         product_id = request.args['product_id'][0]
 
+        prepare_activity = None
+        if 'prepare' in request.args:
+            prepare_activity = request.args['prepare'][0]
+
         transfer_id = str(uuid.uuid1())
 
         def _add_initial(txn):
@@ -148,9 +152,11 @@ class TransferSubmit (Resource):
             """
             try:
                 txn.execute("INSERT INTO transfers (transfer_id, product_id, "
-                            "status, destination_path, submitter) VALUES (%s, "
-                            "%s, 'INIT', %s, %s)", [transfer_id, product_id,
-                                                    destination_path, x509dn])
+                            "status, destination_path, submitter, "
+                            "prepare_activity) VALUES (%s, %s, 'INIT', %s, "
+                            "%s, %s)", [transfer_id, product_id,
+                                        destination_path, x509dn,
+                                        prepare_activity])
             except Exception, e:
                 self._log.error(e)
                 request.setResponseCode(500)

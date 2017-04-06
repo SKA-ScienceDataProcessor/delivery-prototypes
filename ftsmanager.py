@@ -24,7 +24,6 @@ import pika
 import twisted
 
 from os.path import basename
-from sys import stderr
 from time import sleep
 from twisted.internet import reactor
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \

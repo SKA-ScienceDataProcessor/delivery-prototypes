@@ -77,6 +77,7 @@ the configuration file.
 
 * `product_id`
 * `destination_path`: A directory in which the resulting file is to be deposited
+* `prepare`: Details of any preprocessing to be done
 
 **Returns**
 
@@ -169,6 +170,7 @@ with its INI-style formatting of the file.  It has the following fields:
 * `amqp` section
 
     * `uri`: URI to use to connect to the = amqp://localhost
+    * `prepare_queue`: Name of the queue in which preprocessing requests are to be stored
     * `staging_queue`: Name of the queue in which staging requests are to be stored
     * `transfer_queue`: Name of the queue in which transfer requests are to be stored
 
@@ -191,6 +193,9 @@ with its INI-style formatting of the file.  It has the following fields:
     * `polling_interval`: The interval in seconds between instances in which the FTS
       server is polled.
 
+* `prepare` section
+
+    * `concurrent_max`: The maximum number of preprocessing tasks that can take place simultaneously
 
 Database description
 ===
@@ -202,7 +207,7 @@ Note that for now using varchar(255) for the FTS ID, although this might be a pr
 CREATE TABLE transfers (
 transfer_id VARCHAR(36),
 product_id TEXT,
-status ENUM('INIT', 'SUBMITTED', 'STAGING', 'DONESTAGING', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
+status ENUM('INIT', 'SUBMITTED', 'STAGING', 'STAGINGDONE', 'PREPARING', 'PREPARINGDONE', 'TRANSFERRING', 'ERROR', 'SUCCESS') NOT NULL,
 extra_status TEXT,
 destination_path TEXT,
 submitter TEXT,
@@ -211,9 +216,12 @@ fts_details TEXT,
 stager_path TEXT,
 stager_hostname TEXT,
 stager_status TEXT,
+prepare_activity TEXT,
 time_submitted TIMESTAMP NULL,
 time_staging TIMESTAMP NULL,
-time_staging_finished TIMESTAMP NULL,
+time_staging_done TIMESTAMP NULL,
+time_preparing TIMESTAMP NULL,
+time_preparing_done TIMESTAMP NULL,
 time_transferring TIMESTAMP NULL,
 time_error TIMESTAMP NULL,
 time_success TIMESTAMP NULL,
@@ -228,8 +236,12 @@ BEGIN
         SET NEW.time_submitted = NOW();
     ELSEIF NEW.status = 'STAGING' THEN
         SET NEW.time_staging = NOW();
-    ELSEIF NEW.status = 'DONESTAGING' THEN
-        SET NEW.time_staging_finished = NOW();
+    ELSEIF NEW.status = 'STAGINGDONE' THEN
+        SET NEW.time_staging_done = NOW();
+    ELSEIF NEW.status = 'PREPARING' THEN
+        SET NEW.time_preparing = NOW();
+    ELSEIF NEW.status = 'PREPARINGDONE' THEN
+        SET NEW.time_preparing_done = NOW();
     ELSEIF NEW.status = 'TRANSFERRING' THEN
         SET NEW.time_transferring = NOW();
     ELSEIF NEW.status = 'ERROR' THEN

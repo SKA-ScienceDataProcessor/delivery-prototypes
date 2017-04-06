@@ -45,8 +45,9 @@ from stagingfinish import StagingFinish
 from transfersubmit import TransferSubmit
 from transferstatus import TransferStatus
 
-# FTS and Staging backends
+# FTS, Prepare and Staging backends
 from staging import init_staging
+from prepare import init_prepare
 from ftsmanager import init_fts_manager
 
 # Util methods
@@ -89,6 +90,7 @@ def main():
     log.info("DB Connection Established")
 
     # Retrieve values needed for rabbit mq connections
+    prepare_queue = configData.get('amqp', 'prepare_queue')
     staging_queue = configData.get('amqp', 'staging_queue')
     transfer_queue = configData.get('amqp', 'transfer_queue')
     pika_hostname = configData.get('amqp', 'hostname')
@@ -113,8 +115,13 @@ def main():
         staging_cert = configData.get('staging', 'cert')
         staging_key = configData.get('staging', 'key')
         init_staging(pika_conn, dbpool, staging_queue, staging_concurrent_max,
-                     staging_url, staging_callback, transfer_queue,
+                     prepare_queue, staging_url, staging_callback,
                      staging_cert, staging_key)
+
+        # Setup prepare manager
+        prepare_concurrent_max = configData.get('prepare', 'concurrent_max')
+        init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
+                     prepare_concurrent_max)
 
         # Setup FTS manager
         fts_concurrent_max = configData.get('fts', 'concurrent_max')

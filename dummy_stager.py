@@ -90,7 +90,7 @@ def _process_staging_request(transfer_id, product_id, callback):
         elif os.path.isfile(src_path):
             os.link(src_path, dst_file)
         else:
-            raise Exception("Product %s not found" % product_id) 
+            raise Exception("Product %s not found" % product_id)
     except Exception, e:
         stagingError = e
 

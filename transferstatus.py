@@ -71,17 +71,18 @@ class TransferStatus (Resource):
             txn.execute("SELECT transfer_id, product_id, status, "
                         "extra_status, destination_path, submitter, fts_id, "
                         "fts_details, stager_path, stager_hostname, "
-                        "stager_status, time_submitted, time_staging, "
-                        "time_staging_finished, time_transferring, time_error,"
-                        " time_success FROM transfers WHERE transfer_id = %s",
-                        [transfer_id])
+                        "stager_status, prepare_activity, time_submitted, "
+                        "time_staging, time_staging_done, time_transferring, "
+                        "time_error, time_success FROM transfers WHERE "
+                        "transfer_id = %s", [transfer_id])
             result = txn.fetchone()
             if result:
                 fields = ['transfer_id', 'product_id', 'status',
                           'extra_status', 'destination_path', 'submitter',
                           'fts_id', 'fts_details', 'stager_path',
-                          'stager_hostname', 'stager_status', 'time_submitted',
-                          'time_staging', 'time_staging_finished',
+                          'stager_hostname', 'stager_status',
+                          'prepare_activity', 'time_submitted',
+                          'time_staging', 'time_staging_done',
                           'time_transferring', 'time_error', 'time_success']
                 results = dict(zip(fields, result))
 
