@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Web interface called when staging tasks have been completed."""
+"""Web interface called when prepare tasks have been completed."""
 # Copyright 2017  University of Cape Town
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 
 from __future__ import print_function  # for python 2
 
-from staging import finish_staging
+from prepare import finish_prepare
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.logger import Logger
 from twisted.web.resource import Resource
@@ -30,23 +30,23 @@ __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 # API function fall: doneStaging
 # (have the stager signal that a transfer has been staged to local disk)
-class StagingFinish (Resource):
-    """Used to signal that a transfer has finished staging.
+class PrepareFinish (Resource):
+    """Used to signal that a transfer has finished preprocessing.
 
-    Mounted at /doneStaging.
+    Mounted at /donePrepare.
     """
 
     isLeaf = True
 
-    def __init__(self, stager_dn):
-        """Initialize transfer submission REST interface.
+    def __init__(self, prepare_dn):
+        """Initialize preprocessing completion REST interface.
 
         Arguments:
-        stager_dn -- distinguished name of the X.509 cert connections
+        prepare_dn -- distinguished name of the X.509 cert connections
           should be accepting from.
         """
         Resource.__init__(self)
-        self.stager_dn = stager_dn
+        self.prepare_dn = prepare_dn
         self.log = Logger()
 
     def render_GET(self, request):
@@ -54,45 +54,42 @@ class StagingFinish (Resource):
         try:
             params = {
               'transfer_id': request.args['transfer_id'][0],
-              'product_id': request.args['product_id'][0],
-              'stager_success': request.args['success'][0],
-              'staged_to': request.args['staged_to'][0],
-              'path': request.args['path'][0],
+              'success': request.args['success'][0],
               'msg': request.args['msg'][0]
             }
         except Exception:
-            self.log.error('Invalid arguments calling doneStaging')
+            self.log.error('Invalid arguments calling donePrepare')
             request.setResponseCode(400)
             return('Invalid arguments\n')
 
-        def _handle_finish_staging_result(success):
-            """Report status of handling request back to stager."""
+        def _handle_finish_prepare_result(success):
+            """Report status of handling request to prepare system."""
             if success:
                 request.setResponseCode(200)
             else:
-                self.log.error('finish_staging reported an error\n')
+                self.log.error('finish_prepare reported an error\n')
                 request.setResponseCode(500)
-            request.write('Finished processing staging callback\n')
+            request.write('Finished processing prepare callback\n')
             request.finish()
 
-        def _handle_finish_staging_error(failure):
-            """Report failure processing the staging completion notice."""
+        def _handle_finish_prepare_error(failure):
+            """Report failure processing the prepare completion notice."""
             self.log.error(failure)
             request.setResponseCode(500)
             request.write('Exception thrown running finish_staging\n')
             request.finish()
 
         auth = check_auth(request, request.args['transfer_id'][0],
-                          True, self.stager_dn)
+                          True, self.prepare_dn)
         if not auth:
             request.setResponseCode(403)
             request.write('Unauthorized')
             request.finish()
 
         # Setup deferred to manage finish_staging asynchronously
-        d = finish_staging(**params)
-        d.addCallback(_handle_finish_staging_result)
-        d.addErrback(_handle_finish_staging_error)
+        d = finish_prepare(**params)
+        d.addCallback(_handle_finish_prepare_result)
+        d.addErrback(_handle_finish_prepare_error)
         return NOT_DONE_YET
 
     def render_POST(self, request):

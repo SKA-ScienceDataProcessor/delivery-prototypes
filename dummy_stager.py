@@ -35,7 +35,6 @@ from OpenSSL import crypto
 from os.path import dirname, exists, expanduser, join, realpath
 from socket import gethostname as hostname
 from twisted.internet import endpoints, reactor, ssl, threads
-from twisted.internet.defer import inlineCallbacks
 from twisted.python import log
 from twisted.web.server import Site
 

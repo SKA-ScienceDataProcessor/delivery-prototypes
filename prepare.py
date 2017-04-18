@@ -19,13 +19,81 @@ from __future__ import print_function  # for python 2
 
 import pika
 import json
+import requests
 
-from twisted.internet import reactor
+from twisted.internet import reactor, threads
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
                                    returnValue
 from twisted.logger import Logger
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
+
+
+@inlineCallbacks
+def finish_prepare(transfer_id, success, msg):
+    """Update state to reflect that preprocessing complete.
+
+    This function updates the status of the database to reflect
+    that the transfer has completed, release the semaphore used,
+    add the transfer ID to the transfer queue.
+
+    Params:
+    transfer_id
+    success -- A boolean indicating whether or not they were successful
+    msg -- Supplemental info reported by the prepare server
+
+    Return Value:
+    Boolean value indicating whether or not there were errors processing
+    the request
+    """
+    global _log
+    global _dbpool
+    global _pika_conn
+    global _sem_prepare
+    global _transfer_queue
+
+    # Get initial status of request
+    err = None
+    r = yield _dbpool.runQuery("SELECT status from transfers WHERE "
+                               "transfer_id = %s", [transfer_id])
+
+    # If status not 'PREPARING' then there was a problem so return False
+    if r[0][0] != 'PREPARING':
+        returnValue(False)
+
+    # Release semaphore
+    yield _sem_prepare.release()
+
+    # Update status
+    try:
+        r = yield _dbpool.runQuery("UPDATE transfers SET status = "
+                                   "'PREPARINGDONE' WHERE transfer_id = "
+                                   "%s", [transfer_id])
+    except Exception, e:
+        yield _log.error('Error updating DB to report prepare finished '
+                         'for transfer %s' % transfer_id)
+        yield _log.error(str(e))
+        err = e
+
+    # Add to transfer queue
+    try:
+        send_properties = pika.BasicProperties(content_type='text/plain',
+                                               delivery_mode=1)
+        channel = yield _pika_conn.channel()
+        yield channel.queue_declare(queue=_transfer_queue, exclusive=False,
+                                    durable=True)
+        yield channel.basic_publish('', _transfer_queue, transfer_id,
+                                    send_properties)
+    except Exception, e:
+        yield _log.error('Error adding transfer %s to rabbitmq transfer '
+                         'queue' % transfer_id)
+        yield _log.error(str(e))
+        err = err
+    finally:
+        yield channel.close()
+
+    # Report whether or not an error was encountered
+    returnValue(err is None)
 
 
 @inlineCallbacks
@@ -36,77 +104,65 @@ def _do_prepare(transfer_id):
     transfer_id -- Identifier of the transfer to prepare
     """
     global _log
+    global _callback
+    global _creds
     global _dbpool
-    global _sem_prepare
-    global _pika_conn
-    global _transfer_queue
 
+    _log.info('Launching prepare for transfer %s' % transfer_id)
+
+    # Update the status of the job to note that prepare has started
     try:
-        # Update the status of the job to note that prepare has started
-        try:
-            r = yield _dbpool.runQuery("UPDATE transfers SET status = "
-                                       "'PREPARING' WHERE transfer_id = "
-                                       "%s", [transfer_id])
-        except Exception, e:
-            yield _log.error('Error updating DB to report prepare started '
-                             'for transfer %s' % transfer_id)
-            yield _log.error(str(e))
-            returnValue(False)
+        r = yield _dbpool.runQuery("UPDATE transfers SET status = "
+                                   "'PREPARING' WHERE transfer_id = "
+                                   "%s", [transfer_id])
+    except Exception, e:
+        yield _log.error('Error updating DB to report prepare started '
+                         'for transfer %s' % transfer_id)
+        yield _log.error(str(e))
+        returnValue(False)
 
-        # Retrieve information needed for prepare step to be run
-        try:
-            r = yield _dbpool.runQuery("SELECT prepare_activity, stager_path, "
-                                       "stager_hostname FROM transfers WHERE "
-                                       "transfer_id = %s", [transfer_id])
-            prepare_activity = r[0][0]
-            stager_path = r[0][1]
-            stager_hostname = r[0][2]
-        except Exception, e:
-            yield _log.error('Error retrieving information from DB needed to '
-                             'run prepare step for transfer %s' % transfer_id)
-            yield _log.error(str(e))
-            returnValue(False)
+    # Retrieve information needed for prepare step to be run
+    try:
+        r = yield _dbpool.runQuery("SELECT prepare_activity, stager_path, "
+                                   "stager_hostname FROM transfers WHERE "
+                                   "transfer_id = %s", [transfer_id])
+        prepare_activity = r[0][0]
+        staged_path = r[0][1]
+        staged_hostname = r[0][2]
+    except Exception, e:
+        yield _log.error('Error retrieving information from DB needed to '
+                         'run prepare step for transfer %s' % transfer_id)
+        yield _log.error(str(e))
+        returnValue(False)
 
-        # Do the prepare step itself
-        if prepare_activity is not None:
-            _log.info("SHOULD DO '%s' with TRANSFER '%s' in DIR '%s' on HOST "
-                      "'%s'" % (prepare_activity, transfer_id, stager_path,
-                                stager_hostname))
-        else:
-            _log.debug("No preprocessing to be done for transfer ID %s"
-                       % transfer_id)
-
-        # Then update the status of the job
+    # Submit request for preprocessing if such was requested
+    if prepare_activity is not None:
+        prepare_uri = 'https://%s:8444/prepare' % staged_hostname
         try:
-            r = yield _dbpool.runQuery("UPDATE transfers SET status = "
-                                       "'PREPARINGDONE' WHERE transfer_id = "
-                                       "%s", [transfer_id])
+            params = {'transfer_id': transfer_id, 'dir': staged_path,
+                      'prepare': prepare_activity, 'callback': _callback}
+            r = yield threads.deferToThread(requests.post, prepare_uri,
+                                            data=params, cert=_creds)
+            if int(r.status_code) >= 400:
+                raise Exception('The prepare service reported an error '
+                                '- status was %s' % r.code)
+                yield _dbpool.runQuery("UPDATE transfers SET status = "
+                                       "'ERROR', extra_status = 'Error "
+                                       "preprocessing' WHERE transfer_id "
+                                       "= %s", [transfer_id])
         except Exception, e:
-            yield _log.error('Error updating DB to report prepare finished '
-                             'for transfer %s' % transfer_id)
-            yield _log.error(str(e))
-            returnValue(False)
+            _log.error('Error contacting prepare service to submit request '
+                       'for transfer ID %s' % transfer_id)
+            _log.error(str(e))
+            yield _dbpool.runQuery("UPDATE transfers SET status = 'ERROR', "
+                                   "extra_status = 'Error preprocessing' "
+                                   "WHERE transfer_id = %s", [transfer_id])
 
-        # And add to the transfer queue
-        try:
-            send_properties = pika.BasicProperties(content_type='text/plain',
-                                                   delivery_mode=1)
-            channel = yield _pika_conn.channel()
-            yield channel.queue_declare(queue=_transfer_queue, exclusive=False,
-                                        durable=True)
-            yield channel.basic_publish('', _transfer_queue, transfer_id,
-                                        send_properties)
-        except Exception, e:
-            yield _log.error('Error adding transfer %s to rabbitmq transfer '
-                             'queue' % transfer_id)
-            yield _log.error(str(e))
-            returnValue(False)
-        finally:
-            yield channel.close()
-        returnValue(True)
-    finally:
-        # Remember to release the semaphore once done
-        yield _sem_prepare.release()
+    # If no prepare step then immediately call finish_prepare
+    else:
+        msg = "No preprocessing requested for transfer ID %s" % transfer_id
+        _log.debug(msg)
+        finish_prepare(transfer_id, True, msg)
 
 
 @inlineCallbacks
@@ -140,7 +196,7 @@ def _prepare_queue_listener():
 
 
 def init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
-                 concurrent_max):
+                 concurrent_max, creds, callback):
     """Init handling of preprocessing products before handling.
 
     Note that this function initializes a semaphore used to enforce a
@@ -156,8 +212,13 @@ def init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
       transfer requests
     concurrent_max -- Maximum number of preprocessing tasks permitted to be
       in the PREPARING state at any point in time.
+    creds -- A tuple specifying a (cert, key) with which to contact the
+      prepare service.
+    callback -- URL to report results of the prepare operation to
     """
     global _log
+    global _callback
+    global _creds
     global _dbpool
     global _pika_conn
     global _prepare_queue
@@ -167,6 +228,8 @@ def init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
 
     _log = Logger()
 
+    _callback = callback
+    _creds = creds
     _dbpool = dbpool
     _pika_conn = pika_conn
     _prepare_queue = prepare_queue

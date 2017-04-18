@@ -40,6 +40,7 @@ from twisted.web.resource import Resource
 from twisted.web.server import Site
 
 # The web pages
+from preparefinish import PrepareFinish
 from rootpage import RootPage
 from stagingfinish import StagingFinish
 from transfersubmit import TransferSubmit
@@ -101,12 +102,14 @@ def main():
 
     def _setupApp(pika_conn):
         stager_dn = configData.get('staging', 'x509dn')
+        prepare_dn = configData.get('prepare', 'x509dn')
 
         # Add child web pages
         t_submit = TransferSubmit(dbpool, staging_queue, pika_conn)
         root.putChild('submitTransfer', t_submit)
         root.putChild('transferStatus', TransferStatus(dbpool))
-        root.putChild('doneStaging', StagingFinish(dbpool, stager_dn))
+        root.putChild('doneStaging', StagingFinish(stager_dn))
+        root.putChild('donePrepare', PrepareFinish(prepare_dn))
 
         # Setup staging manager
         staging_concurrent_max = configData.get('staging', 'concurrent_max')
@@ -120,8 +123,12 @@ def main():
 
         # Setup prepare manager
         prepare_concurrent_max = configData.get('prepare', 'concurrent_max')
+        prepare_cert = configData.get('prepare', 'cert')
+        prepare_key = configData.get('prepare', 'key')
+        prepare_callback = configData.get('prepare', 'callback')
         init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
-                     prepare_concurrent_max)
+                     prepare_concurrent_max, (prepare_cert, prepare_key),
+                     prepare_callback)
 
         # Setup FTS manager
         fts_concurrent_max = configData.get('fts', 'concurrent_max')

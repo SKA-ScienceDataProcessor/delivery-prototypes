@@ -115,6 +115,30 @@ JSON with all database fields
 * 404: If not found
 * 500: If an error occurred processing the request
 
+/donePrepare
+---
+
+This is an internal call used to enable the prepare system to report the completion
+of preprocessing. It allows requests to use either GET or POST methods.
+
+Note that in order to post to this URL the certificate corresponding to the X.509
+distinguished name listed in the `prepare` section of the config file as `x509dn` must
+be used when making the request.
+
+**Parameters**
+
+* `transfer_id`: Transfer ID
+* `success`: A boolean indicating whether or not the product ID was successfully staged
+* `msg`: A text message from the stager indicating the results of the request
+
+**HTTP status code**
+
+* 200: If all is normal
+* 400: If parameters were invalid
+* 403: If the request was unauthorized
+* 500: If there was an error detecting when processing the report
+
+
 /doneStaging
 ---
 
@@ -140,6 +164,7 @@ be used when making the request.
 * 400: If parameters were invalid
 * 403: If the request was unauthorized
 * 500: If there was an error detecting when processing the report
+
 
 Configuration file
 ===
@@ -196,6 +221,12 @@ with its INI-style formatting of the file.  It has the following fields:
 * `prepare` section
 
     * `concurrent_max`: The maximum number of preprocessing tasks that can take place simultaneously
+    * `server`: URL of the staging server interface
+    * `callback`: URL to contact once the staging has been completed
+    * `x509dn`: X.509 distinguished name of the certificate used by the stager to
+      communicate with the server
+    * `cert`: Path to an X.509 certificate to use
+    * `key`: Path to key for certificate
 
 Database description
 ===
@@ -277,7 +308,13 @@ Known issues
   much none of the packages used are threadsafe including twisted (which fairly
   significantly restricts the amount of parallelism which can works.
 
-* FTS transfers currently use default settings
+* FTS transfers currently use default settings.  It may be necessary to alter these settings
+  or perhaps even alter FTS or the underlying GFAL plugin for GridFTP as ASTRON's firewall
+  apparently permits only passive transfers.
+
+* The transfer service currently assumes that all preprocessing servers runs on port
+  8444.  The configuration file for the preprocessing service allows a different port
+  to be specified but that is *not* presently supported by the service.
 
 Example commands
 ===
