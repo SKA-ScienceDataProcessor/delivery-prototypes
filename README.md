@@ -40,9 +40,20 @@ paths to access files in other directories.*
 
 ```sh
 . ~/venv/bin/activate
-cd ~/transferprototype
+cd ~/transferprototype/dummy_stager
 ./dummy_stager.py
 ```
+
+**Transfer Agent**
+This agent is to be run on each of the transfer nodes in operation.  It can be launched
+as follows:
+
+```sh
+. ~/venv/bin/activate
+cd ~/transferprototype/transferagent
+./transferagent.py
+```
+
 
 **Transfer tool**
 In order for this to work, a MySQL database needs to be setup and a table created as
@@ -324,7 +335,7 @@ Example commands
 # Get product ID 005
 curl https://deliv-prot1.cyberska.org:8443/submitTransfer -d product_id=005 \
     -d destination_path=gsiftp://ubuntu@deliv-prot2.cyberska.org/home/ubuntu/staged \
-    -E /tmp/x509up_u1000
+    -d prepare=foo -E /tmp/x509up_u1000
 ```
 
 * Get transfer status:
