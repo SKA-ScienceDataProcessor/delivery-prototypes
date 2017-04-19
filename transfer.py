@@ -139,7 +139,8 @@ def main():
                      ]
         fts_interval = configData.get('fts', 'polling_interval')
         init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
-                         fts_concurrent_max, fts_interval)
+                         fts_concurrent_max, fts_interval,
+                         (prepare_cert, prepare_key))
 
     # Setup pika connection
     pika_cc = ClientCreator(reactor, TwistedProtocolConnection,

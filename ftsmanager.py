@@ -21,17 +21,16 @@ import fts3.rest.client.easy as fts3
 import json
 import os
 import pika
+import requests
 import twisted
 
 from os.path import basename
 from time import sleep
-from twisted.internet import reactor
+from twisted.internet import reactor, threads
 from twisted.internet.defer import DeferredSemaphore, inlineCallbacks, \
                                    returnValue
 from twisted.internet.task import LoopingCall
 from twisted.logger import Logger
-
-from util import get_files_in_dir
 
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
@@ -119,6 +118,7 @@ def _start_fts_transfer(transfer_id):
     global _log
     global _dbpool
     global _fts_params
+    global _prepare_creds
 
     try:
         fts_context = fts3.Context(*_fts_params)
@@ -147,15 +147,33 @@ def _start_fts_transfer(transfer_id):
     dst = '%s/%s' % (str(r[0][2]).rstrip('/'), basename(r[0][0]))
     _log.info("About to transfer '%s' to '%s' for transfer %s" %
               (src, dst, transfer_id))
+
+    # Retrieve a list of file to add from the transfer agent running on the
+    # transfer server
+    transfer_host = 'https://%s:8444/files' % r[0][1]
     try:
-        if os.path.isdir(localpath):
-            files = get_files_in_dir(localpath)
-            transfers = []
-            for file in files:
-                transfers.append(fts3.new_transfer(src + '/' + file,
-                                                   dst + '/' + file))
-        else:
-            transfers = [fts3.new_transfer(src, dst)]
+        r = yield threads.deferToThread(requests.post, transfer_host,
+                                        data={'dir': localpath},
+                                        cert=(_prepare_creds))
+        body = json.loads(r.text)
+        if r.status_code != 200:
+            raise Exception(body['msg'])
+
+        files = body['files']
+    except Exception, e:
+        _log.error('Error retrieving file list for transfer %s from %s'
+                    % (transfer_id, transfer_host))
+        _log.error(str(e))
+        _dbpool.runQuery("UPDATE transfers SET status='ERROR', extra_status = "
+                         "%s WHERE transfer_id = %s", [str(e), transfer_id])
+
+    # Setup the list of transfers and submit to FTS
+    try:
+        transfers = []
+        for file in files:
+            transfers.append(fts3.new_transfer(src + '/' + file,
+                                               dst + '/' + file))
+
         fts_job = fts3.new_job(transfers)
         fts_id = fts3.submit(fts_context, fts_job)
         fts_job_status = fts3.get_job_status(fts_context, fts_id,
@@ -219,7 +237,7 @@ def _transfer_queue_listener():
 
 
 def init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
-                     concurrent_max, polling_interval):
+                     concurrent_max, polling_interval, prepare_creds):
     """Initialize services to manage transfers using FTS.
 
     This involves:
@@ -244,11 +262,14 @@ def init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
     polling_interval -- Interval in seconds between polling attempts of
       the FTS server to update the status of transfers currently in the
       TRANSFERRING state
+    prepare_creds -- A tuple containing filenames of a certificate and key
+      used to authenticate with the transfer agent
     """
     global _log
     global _dbpool
     global _fts_params
     global _pika_conn
+    global _prepare_creds
     global _transfer_queue
     global _sem_fts
 
@@ -257,6 +278,7 @@ def init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
     _pika_conn = pika_conn
     _dbpool = dbpool
     _fts_params = fts_params
+    _prepare_creds = prepare_creds
     _transfer_queue = transfer_queue
     _sem_fts = DeferredSemaphore(int(concurrent_max))
 
