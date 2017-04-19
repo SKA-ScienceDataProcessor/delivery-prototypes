@@ -30,6 +30,23 @@ sudo chown `whoami` /etc/authbind/byport/{80,443}
 Launching the service
 ===
 
+Transfer Service
+---
+
+In order for this to work, a MySQL database needs to be setup and a table created as
+outlined later in this file. It is also necessary to update the configuration file
+to work in your installation, using the config file section later in in the document.
+To avoid mixing configuration and code, installs should specify their configuration in
+`~/.transfer.cfg` which will replace the default configuration when available.
+```sh
+. ~/venv/bin/activate
+cd ~/transferprototype
+./transfer.py
+```
+
+Supplemental Tools
+---
+
 **Stager**
 The current stager service is more minimalistic than the version found in the `legacy`
 folder.  At present the service is hardcoded to accept as product IDs filenames in the
@@ -44,7 +61,7 @@ cd ~/transferprototype/dummy_stager
 ./dummy_stager.py
 ```
 
-**Transfer Agent**
+**Transfer Node Agent**
 This agent is to be run on each of the transfer nodes in operation.  It can be launched
 as follows:
 
@@ -54,23 +71,11 @@ cd ~/transferprototype/transferagent
 ./transferagent.py
 ```
 
-
-**Transfer tool**
-In order for this to work, a MySQL database needs to be setup and a table created as
-outlined later in this file. It is also necessary to update the configuration file
-to work in your installation, using the config file section later in in the document.
-To avoid mixing configuration and code, installs should specify their configuration in
-`~/.transfer.cfg` which will replace the default configuration when available.
-```sh
-. ~/venv/bin/activate
-cd ~/transferprototype
-./transfer.py
-```
-
-Dirs
+Directories
 ===
 * `legacy`: Contains code from an earlier incarnation that didn't use a DB backend
-* `throwaway`: Contains code not meant to be part of the final product.  Used for prototyping new additions to the codebase.
+* `dummy_stager`: A trimmed down staging service implementation, *not for production use*
+* `transferagent`: A service to be run on each of the transfer nodes
 
 REST API description
 ===
