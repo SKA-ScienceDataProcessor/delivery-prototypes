@@ -57,6 +57,7 @@ from util import load_allowed_DNs
 __author__ = "David Aikema, <david.aikema@uct.ac.za>"
 
 
+@inlineCallbacks
 def main():
     """Main function for transfer service prototype.
 
@@ -96,58 +97,56 @@ def main():
     transfer_queue = configData.get('amqp', 'transfer_queue')
     pika_hostname = configData.get('amqp', 'hostname')
 
+    # Setup pika connection
+    pika_cc = ClientCreator(reactor, TwistedProtocolConnection,
+                            ConnectionParameters())
+    pika_conn = yield pika_cc.connectTCP(pika_hostname, 5672)
+    yield pika_conn.ready
+
     # Create root webpage
     root = RootPage()
     root.putChild('', root)
 
-    def _setupApp(pika_conn):
-        stager_dn = configData.get('staging', 'x509dn')
-        prepare_dn = configData.get('prepare', 'x509dn')
+    stager_dn = configData.get('staging', 'x509dn')
+    prepare_dn = configData.get('prepare', 'x509dn')
 
-        # Add child web pages
-        t_submit = TransferSubmit(dbpool, staging_queue, pika_conn)
-        root.putChild('submitTransfer', t_submit)
-        root.putChild('transferStatus', TransferStatus(dbpool))
-        root.putChild('doneStaging', StagingFinish(stager_dn))
-        root.putChild('donePrepare', PrepareFinish(prepare_dn))
+    # Add child web pages
+    t_submit = TransferSubmit(dbpool, staging_queue, pika_conn)
+    root.putChild('submitTransfer', t_submit)
+    root.putChild('transferStatus', TransferStatus(dbpool))
+    root.putChild('doneStaging', StagingFinish(stager_dn))
+    root.putChild('donePrepare', PrepareFinish(prepare_dn))
 
-        # Setup staging manager
-        staging_concurrent_max = configData.get('staging', 'concurrent_max')
-        staging_url = configData.get('staging', 'server')
-        staging_callback = configData.get('staging', 'callback')
-        staging_cert = configData.get('staging', 'cert')
-        staging_key = configData.get('staging', 'key')
-        init_staging(pika_conn, dbpool, staging_queue, staging_concurrent_max,
-                     prepare_queue, staging_url, staging_callback,
-                     staging_cert, staging_key)
+    # Setup staging manager
+    staging_concurrent_max = configData.get('staging', 'concurrent_max')
+    staging_url = configData.get('staging', 'server')
+    staging_callback = configData.get('staging', 'callback')
+    staging_cert = configData.get('staging', 'cert')
+    staging_key = configData.get('staging', 'key')
+    init_staging(pika_conn, dbpool, staging_queue, staging_concurrent_max,
+                 prepare_queue, staging_url, staging_callback,
+                 staging_cert, staging_key)
 
-        # Setup prepare manager
-        prepare_concurrent_max = configData.get('prepare', 'concurrent_max')
-        prepare_cert = configData.get('prepare', 'cert')
-        prepare_key = configData.get('prepare', 'key')
-        prepare_callback = configData.get('prepare', 'callback')
-        init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
-                     prepare_concurrent_max, (prepare_cert, prepare_key),
-                     prepare_callback)
+    # Setup prepare manager
+    prepare_concurrent_max = configData.get('prepare', 'concurrent_max')
+    prepare_cert = configData.get('prepare', 'cert')
+    prepare_key = configData.get('prepare', 'key')
+    prepare_callback = configData.get('prepare', 'callback')
+    init_prepare(pika_conn, dbpool, prepare_queue, transfer_queue,
+                 prepare_concurrent_max, (prepare_cert, prepare_key),
+                 prepare_callback)
 
-        # Setup FTS manager
-        fts_concurrent_max = configData.get('fts', 'concurrent_max')
-        fts_params = [
-                      configData.get('fts', 'server'),  # URI of FTS service
-                      configData.get('fts', 'cert'),  # cert
-                      configData.get('fts', 'key')  # key
-                     ]
-        fts_interval = configData.get('fts', 'polling_interval')
-        init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
-                         fts_concurrent_max, fts_interval,
-                         (prepare_cert, prepare_key))
-
-    # Setup pika connection
-    pika_cc = ClientCreator(reactor, TwistedProtocolConnection,
-                            ConnectionParameters())
-    d = pika_cc.connectTCP(pika_hostname, 5672)
-    d.addCallback(lambda protocol: protocol.ready)
-    d.addCallback(_setupApp)
+    # Setup FTS manager
+    fts_concurrent_max = configData.get('fts', 'concurrent_max')
+    fts_params = [
+                  configData.get('fts', 'server'),  # URI of FTS service
+                  configData.get('fts', 'cert'),  # cert
+                  configData.get('fts', 'key')  # key
+                 ]
+    fts_interval = configData.get('fts', 'polling_interval')
+    init_fts_manager(pika_conn, dbpool, fts_params, transfer_queue,
+                     fts_concurrent_max, fts_interval,
+                     (prepare_cert, prepare_key))
 
     # Create factory for site
     factory = Site(root)
@@ -201,7 +200,7 @@ def main():
                                                ssl_ctx_factory)
     sslendpoint.listen(factory)
 
-    reactor.run()
 
 if __name__ == '__main__':
     main()
+    reactor.run()

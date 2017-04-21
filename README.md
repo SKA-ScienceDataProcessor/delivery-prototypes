@@ -21,7 +21,8 @@ virtualenv --system-site-packages venv
 # when trying to use it if installed by pip
 pip install pika twisted ConfigParser service_identity requests urllib3[secure] \
   pyOpenSSL cryptography idna certifi mysql-python git+https://gitlab.cern.ch/fts/fts-rest
-pip install klein # this is only used for the dummy stager
+pip install klein # this is only used for the dummy stager and transfer agent
+pip install mock # used only for tests
 sudo touch /etc/authbind/byport/{80,443}
 sudo chmod 500 /etc/authbind/byport/{80,443}
 sudo chown `whoami` /etc/authbind/byport/{80,443}
