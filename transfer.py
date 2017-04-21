@@ -69,8 +69,6 @@ def main():
     * ... and finally, starts reactor
     """
     log = Logger()
-    observer = FileLogObserver(sys.stdout, lambda x: formatEvent(x) + "\n")
-    globalLogPublisher.addObserver(observer)
     log.info("Initialized logging")
     twisted.python.log.startLogging(sys.stdout)
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
